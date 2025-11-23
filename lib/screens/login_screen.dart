@@ -4,6 +4,7 @@ import 'societree/societree_dashboard.dart';
 import '../services/api_service.dart';
 import '../modules/elecom/elecom_admin/admin_home_screen.dart';
 import 'package:centralized_societree/config/api_config.dart';
+import 'package:centralized_societree/services/user_session.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -60,6 +61,11 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
         if (success && isLogin) {
+          // Save session for downstream API calls
+          UserSession.setFromResponse(res);
+          if ((UserSession.studentId ?? '').isEmpty) {
+            UserSession.studentId = studentId;
+          }
           final role = (res['role'] ?? '').toString().toLowerCase();
           final Widget next = role == 'admin'
               ? const AdminHomeScreen()

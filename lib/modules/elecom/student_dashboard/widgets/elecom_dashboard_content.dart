@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'dart:ui';
 import '../../omnibus_slideshow.dart';
 import '../../parties_candidates_grid.dart';
 import '../../things_to_know.dart';
 import 'election_info_sheets.dart';
+import 'student_bottom_nav_bar.dart';
 
 class ElecomDashboardContent extends StatelessWidget {
   final ThemeData theme;
@@ -202,50 +202,9 @@ class ElecomDashboardContent extends StatelessWidget {
                         ),
                         elevation: 0,
                       ),
-                      onPressed: voted
-                          ? null
-                          : () async {
-                              final ok = await showDialog<bool>(
-                                context: context,
-                                barrierDismissible: true,
-                                builder: (ctx) {
-                                  return BackdropFilter(
-                                    filter: ImageFilter.blur(
-                                      sigmaX: 6,
-                                      sigmaY: 6,
-                                    ),
-                                    child: AlertDialog(
-                                      title: const Text('Confirm Vote'),
-                                      content: Text(
-                                        selectedCandidate == null
-                                            ? 'Proceed to vote?'
-                                            : 'Cast your vote for "$selectedCandidate"?',
-                                      ),
-                                      actions: [
-                                        TextButton(
-                                          onPressed: () =>
-                                              Navigator.of(ctx).pop(false),
-                                          child: const Text('Cancel'),
-                                        ),
-                                        ElevatedButton(
-                                          onPressed: () =>
-                                              Navigator.of(ctx).pop(true),
-                                          child: const Text('Confirm'),
-                                        ),
-                                      ],
-                                    ),
-                                  );
-                                },
-                              );
-                              if (ok == true && context.mounted) {
-                                onVoteSubmitted(true);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Vote submitted'),
-                                  ),
-                                );
-                              }
-                            },
+                      onPressed: voted ? null : () async {
+                        await StudentBottomNavBar.openVoteFlow(context);
+                      },
                       child: const Text('Vote Now'),
                     ),
                   ),

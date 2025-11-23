@@ -64,7 +64,9 @@ class StudentDashboardService {
             final partyName = (e['party_name'] ?? '').toString();
             final candidateType = (e['candidate_type'] ?? '').toString();
             final platform = (e['platform'] ?? '').toString();
+            final id = (e['id'] ?? e['candidate_id'] ?? e['cid'] ?? e['student_id'] ?? e['studentId'] ?? '').toString();
             return {
+              'id': id,
               'name': name.trim(),
               'party': (partyName.isNotEmpty ? partyName : party)
                   .toString()

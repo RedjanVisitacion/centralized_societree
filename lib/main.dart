@@ -67,6 +67,7 @@ class MyApp extends StatelessWidget {
                   (args?['parties'] as List?)?.cast<Map<String, dynamic>>() ??
                   const <Map<String, dynamic>>[];
               final candidates =
+              
                   (args?['candidates'] as List?)
                       ?.cast<Map<String, dynamic>>() ??
                   const <Map<String, dynamic>>[];
