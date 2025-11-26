@@ -7,6 +7,7 @@ import 'candidate_registration_screen.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:centralized_societree/config/api_config.dart';
+import 'package:centralized_societree/modules/elecom/services/elecom_voting_service.dart';
 
 class AdminHomeScreen extends StatelessWidget {
   const AdminHomeScreen({super.key});
@@ -395,6 +396,54 @@ class AdminHomeScreen extends StatelessWidget {
                       builder: (_) => const CandidatesScreen(),
                     ),
                   );
+                },
+              ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                icon: const Icon(Icons.restart_alt_rounded),
+                label: const Text('Reset Votes'),
+                style: FilledButton.styleFrom(backgroundColor: Colors.redAccent.shade200),
+                onPressed: () async {
+                  final ok = await showDialog<bool>(
+                    context: context,
+                    barrierDismissible: true,
+                    builder: (ctx) {
+                      return BackdropFilter(
+                        filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
+                        child: AlertDialog(
+                          title: const Text('Reset all votes?'),
+                          content: const Text('This will delete all rows in votes and vote_items so students can vote again. This cannot be undone.'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.of(ctx).pop(false),
+                              child: const Text('Cancel'),
+                            ),
+                            ElevatedButton(
+                              onPressed: () => Navigator.of(ctx).pop(true),
+                              style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent.shade200),
+                              child: const Text('Reset'),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  );
+                  if (ok == true) {
+                    showDialog<void>(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (ctx) => const Center(child: CircularProgressIndicator()),
+                    );
+                    final res = await ElecomVotingService.resetVotes();
+                    if (context.mounted) {
+                      Navigator.of(context).pop();
+                      final success = res.$1;
+                      final message = res.$2;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text(message.isNotEmpty ? message : (success ? 'Votes reset' : 'Failed to reset votes'))),
+                      );
+                    }
+                  }
                 },
               ),
             ],

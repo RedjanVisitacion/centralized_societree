@@ -15,6 +15,28 @@ class ElecomVotingService {
     }
   }
 
+  // Admin: reset all votes (clears votes and vote_items tables)
+  static Future<(bool ok, String message)> resetVotes() async {
+    try {
+      final uri = Uri.parse('$apiBaseUrl/reset_votes.php');
+      final res = await http.post(uri).timeout(const Duration(seconds: 15));
+      final decoded = decodeJson(res.body);
+      if (decoded is Map<String, dynamic>) {
+        final ok = decoded['success'] ?? decoded['ok'] ?? decoded['status'];
+        final msg = (decoded['message'] ?? decoded['error'] ?? '').toString();
+        if (ok is bool) return (ok, msg.isNotEmpty ? msg : (ok ? 'OK' : 'Failed'));
+        if (ok is num) return (ok != 0, msg.isNotEmpty ? msg : ((ok != 0) ? 'OK' : 'Failed'));
+        if (ok is String) {
+          final success = ok == '1' || ok.toLowerCase() == 'true' || ok.toLowerCase() == 'success';
+          return (success, msg.isNotEmpty ? msg : (success ? 'OK' : 'Failed'));
+        }
+      }
+      return (false, 'HTTP ${res.statusCode}');
+    } catch (_) {
+      return (false, 'Network error');
+    }
+  }
+
   // Direct voting (no election id). Server should accept student_id and selections JSON
   static Future<(bool ok, String message, String? receiptId)> submitDirectVote(String studentId, Map<String, String> selections) async {
     try {
