@@ -29,6 +29,27 @@ class ApiService {
     return _decode(res);
   }
 
+  Future<Map<String, dynamic>> updateUserContact({
+    required String studentId,
+    String? email,
+    String? phone,
+  }) async {
+    final uri = Uri.parse('$baseUrl/update_user_contact.php');
+    final payload = {
+      'student_id': studentId,
+      if (email != null) 'email': email,
+      if (phone != null) 'phone': phone,
+    };
+    final res = await http
+        .post(
+          uri,
+          headers: _jsonHeaders,
+          body: jsonEncode(payload),
+        )
+        .timeout(_timeout);
+    return _decode(res);
+  }
+
   Future<Map<String, dynamic>> requestPasswordOtp({
     required String studentId,
     String method = 'email',

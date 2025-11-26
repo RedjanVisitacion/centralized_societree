@@ -171,6 +171,14 @@ class StudentBottomNavBar {
       );
       return;
     }
+    // Prevent navigating if already voted (server-side check)
+    final already = await ElecomVotingService.checkAlreadyVotedDirect(sid);
+    if (already) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You have already cast your vote.')),
+      );
+      return;
+    }
     await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const VotingScreen()),
     );
@@ -753,7 +761,7 @@ class _DirectVoteContentState extends State<_DirectVoteContent> {
                 if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please login to vote.')));
                 return;
               }
-              final (ok, msg) = await ElecomVotingService.submitDirectVote(sid, selections);
+              final (ok, msg, _) = await ElecomVotingService.submitDirectVote(sid, selections);
               if (ok && mounted) {
                 Navigator.of(context).pop();
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vote submitted successfully.')));

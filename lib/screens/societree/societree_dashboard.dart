@@ -5,6 +5,8 @@ import 'package:centralized_societree/modules/elecom/student_dashboard/student_d
     as Elecom;
 import 'package:flutter/material.dart';
 import 'package:centralized_societree/services/user_session.dart';
+import 'package:centralized_societree/config/api_config.dart';
+import 'package:centralized_societree/services/api_service.dart';
 import '../login_screen.dart';
 
 class SocieTreeDashboard extends StatefulWidget {
@@ -21,6 +23,7 @@ class _SocieTreeDashboardState extends State<SocieTreeDashboard> {
   String _displayName = '';
   String _primaryEmail = '';
   String _contactNumber = '';
+  late final ApiService _api;
 
   @override
   void initState() {
@@ -29,10 +32,12 @@ class _SocieTreeDashboardState extends State<SocieTreeDashboard> {
     _displayName = (UserSession.studentId ?? '').trim();
     _primaryEmail = '';
     _contactNumber = '';
+    _api = ApiService(baseUrl: apiBaseUrl);
     _startAutoPlay();
   }
 
   void _openProfileSheet() {
+    final studentId = (UserSession.studentId ?? '').trim();
     final nameCtrl = TextEditingController(text: _displayName);
     final emailCtrl = TextEditingController(text: _primaryEmail);
     final contactCtrl = TextEditingController(text: _contactNumber);
@@ -69,6 +74,15 @@ class _SocieTreeDashboardState extends State<SocieTreeDashboard> {
               ),
               const SizedBox(height: 12),
               TextField(
+                controller: TextEditingController(text: studentId),
+                enabled: false,
+                decoration: const InputDecoration(
+                  labelText: 'Student ID',
+                  prefixIcon: Icon(Icons.badge_outlined),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
                 controller: nameCtrl,
                 decoration: const InputDecoration(
                   labelText: 'Full name',
@@ -100,18 +114,42 @@ class _SocieTreeDashboardState extends State<SocieTreeDashboard> {
                 child: ElevatedButton.icon(
                   icon: const Icon(Icons.save_outlined),
                   label: const Text('Save Changes'),
-                  onPressed: () {
-                    setState(() {
-                      _displayName = nameCtrl.text.trim();
-                      _primaryEmail = emailCtrl.text.trim();
-                      _contactNumber = contactCtrl.text.trim();
-                    });
-                    Navigator.of(ctx).pop();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Profile updated successfully'),
-                      ),
-                    );
+                  onPressed: () async {
+                    final email = emailCtrl.text.trim();
+                    final phone = contactCtrl.text.trim();
+                    // Basic client-side validation
+                    if (email.isNotEmpty && !RegExp(r'^.+@.+\..+$').hasMatch(email)) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter a valid email')));
+                      return;
+                    }
+                    if (phone.isNotEmpty && phone.replaceAll(RegExp(r'\D+'), '').length < 10) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Enter a valid phone number')));
+                      return;
+                    }
+                    // Call API to update contact (student ID immutable)
+                    try {
+                      final res = await _api.updateUserContact(
+                        studentId: studentId,
+                        email: email.isNotEmpty ? email : null,
+                        phone: phone.isNotEmpty ? phone : null,
+                      );
+                      if (res['success'] == true) {
+                        if (!mounted) return;
+                        setState(() {
+                          _displayName = nameCtrl.text.trim();
+                          _primaryEmail = email;
+                          _contactNumber = phone;
+                        });
+                        Navigator.of(ctx).pop();
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Contact updated successfully')));
+                      } else {
+                        if (!mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text((res['message'] ?? 'Update failed').toString())));
+                      }
+                    } catch (_) {
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Network error while updating contact')));
+                    }
                   },
                 ),
               ),

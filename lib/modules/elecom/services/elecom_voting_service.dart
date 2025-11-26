@@ -16,7 +16,7 @@ class ElecomVotingService {
   }
 
   // Direct voting (no election id). Server should accept student_id and selections JSON
-  static Future<(bool ok, String message)> submitDirectVote(String studentId, Map<String, String> selections) async {
+  static Future<(bool ok, String message, String? receiptId)> submitDirectVote(String studentId, Map<String, String> selections) async {
     try {
       final uri = Uri.parse('$apiBaseUrl/submit_vote.php');
       final body = {
@@ -28,19 +28,38 @@ class ElecomVotingService {
       if (decoded is Map<String, dynamic>) {
         final ok = decoded['success'] ?? decoded['ok'] ?? decoded['status'];
         String msg = (decoded['message'] ?? decoded['error'] ?? '').toString();
-        if (ok is bool) return (ok, msg.isNotEmpty ? msg : (ok ? 'OK' : 'Failed'));
-        if (ok is num) return (ok != 0, msg.isNotEmpty ? msg : ((ok != 0) ? 'OK' : 'Failed'));
+        String? voteId = (decoded['vote_id'] ?? decoded['id'])?.toString();
+        if (ok is bool) return (ok, msg.isNotEmpty ? msg : (ok ? 'OK' : 'Failed'), voteId);
+        if (ok is num) return (ok != 0, msg.isNotEmpty ? msg : ((ok != 0) ? 'OK' : 'Failed'), voteId);
         if (ok is String) {
           final success = ok == '1' || ok.toLowerCase() == 'true' || ok.toLowerCase() == 'success';
-          return (success, msg.isNotEmpty ? msg : (success ? 'OK' : 'Failed'));
+          return (success, msg.isNotEmpty ? msg : (success ? 'OK' : 'Failed'), voteId);
         }
       }
       // Debug: print server response to help diagnose failures
       // ignore: avoid_print
       print('[submitDirectVote] HTTP ${res.statusCode}: ${res.body}');
-      return (false, 'HTTP ${res.statusCode}');
+      return (false, 'HTTP ${res.statusCode}', null);
     } catch (e) {
-      return (false, 'Network error');
+      return (false, 'Network error', null);
+    }
+  }
+
+  // Direct check if student already voted (no election id)
+  static Future<bool> checkAlreadyVotedDirect(String studentId) async {
+    try {
+      final uri = Uri.parse('$apiBaseUrl/check_already_voted.php?student_id=${Uri.encodeComponent(studentId)}');
+      final res = await http.get(uri).timeout(const Duration(seconds: 8));
+      final decoded = decodeJson(res.body);
+      if (decoded is Map<String, dynamic>) {
+        final v = decoded['already_voted'] ?? decoded['voted'] ?? decoded['data'];
+        if (v is bool) return v;
+        if (v is num) return v != 0;
+        if (v is String) return v == '1' || v.toLowerCase() == 'true';
+      }
+      return false;
+    } catch (_) {
+      return false;
     }
   }
 
