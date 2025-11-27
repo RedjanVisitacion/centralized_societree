@@ -5,6 +5,9 @@ import '../../services/elecom_voting_service.dart';
 import 'package:centralized_societree/services/user_session.dart';
 import '../services/student_dashboard_service.dart';
 import 'package:centralized_societree/modules/elecom/voting/voting_screen.dart';
+import 'dart:math' as math;
+import 'package:http/http.dart' as http;
+import 'package:centralized_societree/config/api_config.dart';
 
 class StudentBottomNavBar {
   static Widget? build({
@@ -67,6 +70,10 @@ class StudentBottomNavBar {
                           openVoteFlow(context);
                           return;
                         }
+                        if (i == 2) {
+                          _openResultsSheet(context);
+                          return;
+                        }
                         if (i == 3) {
                           _openStatusSheet(context);
                           return;
@@ -78,7 +85,7 @@ class StudentBottomNavBar {
                                 [
                                   'Home',
                                   'Election',
-                                  'Poll History',
+                                  'Results',
                                   'Status',
                                 ][i],
                               ),
@@ -112,14 +119,14 @@ class StudentBottomNavBar {
                         ),
                         BottomNavigationBarItem(
                           icon: Icon(
-                            Icons.history,
+                            Icons.analytics_outlined,
                             color: currentIsDarkMode ? Colors.white70 : null,
                           ),
                           activeIcon: Icon(
-                            Icons.history,
+                            Icons.analytics_outlined,
                             color: currentIsDarkMode ? Colors.white : null,
                           ),
-                          label: 'Poll History',
+                          label: 'Results',
                         ),
                         BottomNavigationBarItem(
                           icon: Icon(
@@ -162,8 +169,581 @@ class StudentBottomNavBar {
     return wrappedNavBar;
   }
 
+  static Future<void> _openResultsSheet(BuildContext context) async {
+    final currentIsDarkMode = themeNotifier.isDarkMode;
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        final sheetColor = currentIsDarkMode ? const Color(0xFF121212) : theme.scaffoldBackgroundColor;
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                child: Container(color: Colors.black.withOpacity(0.15)),
+              ),
+            ),
+            DraggableScrollableSheet(
+              expand: false,
+              initialChildSize: 0.9,
+              maxChildSize: 0.95,
+              minChildSize: 0.5,
+              builder: (_, controller) {
+                return Container(
+                  decoration: const BoxDecoration(
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Material(
+                    color: sheetColor,
+                    child: const _ResultsChartsSheet(),
+                  ),
+                );
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _ResultsChartsSheet extends StatefulWidget {
+  const _ResultsChartsSheet();
+  @override
+  State<_ResultsChartsSheet> createState() => _ResultsChartsSheetState();
+}
+
+class _ResultsChartsSheetState extends State<_ResultsChartsSheet> {
+  bool _loading = true;
+  String? _error;
+  List<_ResultItem> _items = const [];
+  String? _selectedOrg;
+  String? _selectedPos;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final studentId = UserSession.studentId ?? '';
+      // Fetch elections to determine context. If none, try direct results.
+      final elections = await ElecomVotingService.getElections(studentId);
+      String? electionId = elections.isNotEmpty ? (elections.first['id']?.toString() ?? elections.first['election_id']?.toString()) : null;
+
+      // Try to fetch results; backend endpoint assumed as get_election_results.php
+      final results = await _fetchResults(electionId: electionId);
+      if (!mounted) return;
+      setState(() {
+        _items = results;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Unable to load results at the moment.';
+        _loading = false;
+      });
+    }
+  }
+
+  Future<List<_ResultItem>> _fetchResults({String? electionId}) async {
+    Future<List<_ResultItem>> _tryUri(Uri uri) async {
+      final res = await http.get(uri).timeout(const Duration(seconds: 12));
+      final decoded = ElecomVotingService.decodeJson(res.body);
+      final list = ElecomVotingService.extractList(decoded, keys: ['results', 'data', 'items']);
+      final mapped = list.whereType<Map>().map((e) => e.cast<String, dynamic>()).map((m) {
+        final name = (m['candidate'] ?? m['name'] ?? m['candidate_name'] ?? m['fullname'] ?? '').toString();
+        final votesRaw = m['votes'] ?? m['vote_count'] ?? m['count'] ?? m['total_votes'] ?? 0;
+        final votes = votesRaw is num ? votesRaw.toInt() : int.tryParse(votesRaw.toString()) ?? 0;
+        final position = (m['position'] ?? m['position_name'] ?? m['pos'] ?? '').toString();
+        final organization = (m['organization'] ?? m['org'] ?? m['organization_name'] ?? '').toString();
+        return _ResultItem(name: name, votes: votes, position: position, organization: organization);
+      }).where((r) => r.name.isNotEmpty).toList();
+      return mapped;
+    }
+
+    try {
+      // Try several common endpoints and pick the first non-empty result
+      final List<Uri> candidates = [];
+      if (electionId != null && electionId.isNotEmpty) {
+        candidates.add(Uri.parse('${apiBaseUrl}/get_election_results.php?election_id=${Uri.encodeComponent(electionId)}'));
+        candidates.add(Uri.parse('${apiBaseUrl}/get_results.php?election_id=${Uri.encodeComponent(electionId)}'));
+        candidates.add(Uri.parse('${apiBaseUrl}/get_vote_counts.php?election_id=${Uri.encodeComponent(electionId)}'));
+      }
+      candidates.add(Uri.parse('${apiBaseUrl}/get_election_results.php'));
+      candidates.add(Uri.parse('${apiBaseUrl}/get_results.php'));
+      candidates.add(Uri.parse('${apiBaseUrl}/get_vote_counts.php'));
+
+      for (final uri in candidates) {
+        try {
+          final mapped = await _tryUri(uri);
+          if (mapped.isNotEmpty) return mapped;
+        } catch (_) {
+          // continue to next endpoint
+        }
+      }
+      return const [];
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+        child: SizedBox(
+          height: MediaQuery.of(context).size.height * 0.8,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text('Election Results', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+                  const Spacer(),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Expanded(
+                child: _loading
+                    ? const Center(child: CircularProgressIndicator())
+                    : (_error != null
+                        ? Center(
+                            child: Text(
+                              _error!,
+                              style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.error),
+                            ),
+                          )
+                        : _buildResultsBody(theme)),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildResultsBody(ThemeData theme) {
+    // Build filters from available data
+    final orgs = _items.map((e) => e.organization).where((s) => s.isNotEmpty).toSet().toList()..sort();
+    // Predefined organization-position guide (fallback if API lacks some items)
+    const Map<String, List<String>> orgPosGuide = {
+      'USG (University Student Government)': [
+        'President','Vice President','General Secretary','Associate Secretary','Treasurer','Auditor','P.I.O','IT Representative','BTLED Representative','BFPT Representative'
+      ],
+      'SITE (School of Information Technology Education)': [
+        'President','Vice President','General Secretary','Associate Secretary','Treasurer','Auditor','P.I.O'
+      ],
+      'PAFE (Public Administration & Financial Education)': [
+        'President','Vice President','General Secretary','Associate Secretary','Treasurer','Auditor','P.I.O'
+      ],
+      'AFPRTECHS (Allied Fields, Professional, Research & Technology Society)': [
+        'President','Vice President','General Secretary','Associate Secretary','Treasurer','Auditor','P.I.O'
+      ],
+    };
+    // Derive positions; if org selected, show only its positions (guide first, else data-derived)
+    List<String> positions;
+    if (_selectedOrg != null && _selectedOrg!.isNotEmpty) {
+      final fromGuide = orgPosGuide[_selectedOrg!];
+      if (fromGuide != null) {
+        positions = List<String>.from(fromGuide);
+      } else {
+        positions = _items.where((e) => e.organization == _selectedOrg).map((e) => e.position).where((s) => s.isNotEmpty).toSet().toList()..sort();
+      }
+    } else {
+      positions = _items.map((e) => e.position).where((s) => s.isNotEmpty).toSet().toList()..sort();
+    }
+    final filtered = _items.where((e) {
+      final orgOk = (_selectedOrg == null || _selectedOrg == '' || e.organization == _selectedOrg);
+      final posOk = (_selectedPos == null || _selectedPos == '' || e.position == _selectedPos);
+      return orgOk && posOk;
+    }).toList();
+
+    final inputBorder = OutlineInputBorder(borderRadius: BorderRadius.circular(12));
+
+    final filterRow = Wrap(
+      spacing: 12,
+      runSpacing: 8,
+      children: [
+        SizedBox(
+          width: 260,
+          child: DropdownButtonFormField<String>(
+            value: (_selectedOrg?.isEmpty ?? true) ? null : _selectedOrg,
+            isExpanded: true,
+            decoration: InputDecoration(
+              labelText: 'Organization',
+              border: inputBorder,
+              enabledBorder: inputBorder,
+              focusedBorder: inputBorder.copyWith(borderSide: BorderSide(color: theme.colorScheme.primary, width: 2)),
+              filled: true,
+              fillColor: theme.colorScheme.surfaceVariant.withOpacity(0.35),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            ),
+            items: [
+              const DropdownMenuItem<String>(value: '', child: Text('All Organizations')),
+              ...orgs.map((o) => DropdownMenuItem<String>(value: o, child: Text(o))).toList(),
+            ],
+            onChanged: (v) => setState(() { _selectedOrg = (v ?? '').trim(); }),
+          ),
+        ),
+        SizedBox(
+          width: 260,
+          child: DropdownButtonFormField<String>(
+            value: (_selectedPos?.isEmpty ?? true) ? null : _selectedPos,
+            isExpanded: true,
+            decoration: InputDecoration(
+              labelText: 'Position',
+              border: inputBorder,
+              enabledBorder: inputBorder,
+              focusedBorder: inputBorder.copyWith(borderSide: BorderSide(color: theme.colorScheme.primary, width: 2)),
+              filled: true,
+              fillColor: theme.colorScheme.surfaceVariant.withOpacity(0.35),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            ),
+            items: [
+              const DropdownMenuItem<String>(value: '', child: Text('All Positions')),
+              ...positions.map((p) => DropdownMenuItem<String>(value: p, child: Text(p))).toList(),
+            ],
+            onChanged: (v) => setState(() { _selectedPos = (v ?? '').trim(); }),
+          ),
+        ),
+      ],
+    );
+
+    // Overview header and guide
+    final overview = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Election Results Overview', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+        const SizedBox(height: 6),
+        Text(
+          'Select an Organization and Position to view the detailed vote results. Each result includes a bar graph, percentage breakdown, and a pie chart for better visualization.',
+          style: theme.textTheme.bodySmall,
+        ),
+        const SizedBox(height: 8),
+        Theme(
+          data: theme.copyWith(dividerColor: theme.dividerColor.withOpacity(0.2)),
+          child: ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            childrenPadding: const EdgeInsets.only(top: 4),
+            title: Text('Available Organizations and Positions', style: theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700)),
+            children: [
+              _GuideList(title: 'USG (University Student Government)', items: orgPosGuide['USG (University Student Government)'] ?? const []),
+              _GuideList(title: 'SITE (School of Information Technology Education)', items: orgPosGuide['SITE (School of Information Technology Education)'] ?? const []),
+              _GuideList(title: 'PAFE (Public Administration & Financial Education)', items: orgPosGuide['PAFE (Public Administration & Financial Education)'] ?? const []),
+              _GuideList(title: 'AFPRTECHS (Allied Fields, Professional, Research & Technology Society)', items: orgPosGuide['AFPRTECHS (Allied Fields, Professional, Research & Technology Society)'] ?? const []),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    // If a specific position is chosen, show a single professional card
+    if ((_selectedPos != null && _selectedPos!.isNotEmpty)) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          overview,
+          filterRow,
+          const SizedBox(height: 12),
+          Expanded(
+            child: _ResultsSectionCard(
+              title: _selectedPos!,
+              child: _ResultsCharts(items: filtered.isNotEmpty ? filtered : _items),
+            ),
+          ),
+        ],
+      );
+    }
+
+    // Otherwise, render sections grouped by position
+    final byPos = <String, List<_ResultItem>>{};
+    for (final it in filtered.isNotEmpty ? filtered : _items) {
+      final key = it.position.isEmpty ? '—' : it.position;
+      (byPos[key] ??= []).add(it);
+    }
+    final posKeys = byPos.keys.toList()..sort();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        overview,
+        filterRow,
+        const SizedBox(height: 12),
+        Expanded(
+          child: ListView.separated(
+            itemCount: posKeys.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 10),
+            itemBuilder: (ctx, i) {
+              final pos = posKeys[i];
+              final items = byPos[pos]!..sort((a, b) => b.votes.compareTo(a.votes));
+              return _ResultsSectionCard(
+                title: pos,
+                child: _ResultsCharts(items: items),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ResultItem {
+  final String name;
+  final int votes;
+  final String position;
+  final String organization;
+  const _ResultItem({required this.name, required this.votes, required this.position, required this.organization});
+}
+
+class _ResultsSectionCard extends StatelessWidget {
+  final String title;
+  final Widget child;
+  const _ResultsSectionCard({required this.title, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Text(
+                  title,
+                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            child,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GuideList extends StatelessWidget {
+  final String title;
+  final List<String> items;
+  const _GuideList({required this.title, required this.items});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: theme.textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 4),
+          ...items.map((e) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 1),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('• '),
+                    Expanded(child: Text(e, style: theme.textTheme.bodySmall)),
+                  ],
+                ),
+              )),
+        ],
+      ),
+    );
+  }
+}
+
+class _ResultsCharts extends StatelessWidget {
+  final List<_ResultItem> items;
+  const _ResultsCharts({required this.items});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    // Aggregate by candidate across positions (or you could filter by position)
+    final totals = <String, int>{};
+    for (final r in items) {
+      totals[r.name] = (totals[r.name] ?? 0) + r.votes;
+    }
+    final entries = totals.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final totalVotes = entries.fold<int>(0, (s, e) => s + e.value);
+
+    if (entries.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text('No results available yet.', style: theme.textTheme.bodyMedium),
+            const SizedBox(height: 16),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: _BarChart(entries: const [], totalVotes: 0),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(height: 220, width: 220, child: _PieChart(entries: const [], totalVotes: 0)),
+          ],
+        ),
+      );
+    }
+
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Bar Chart', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          _BarChart(entries: entries, totalVotes: totalVotes),
+          const SizedBox(height: 16),
+          Text('Pie Chart', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          Center(
+            child: SizedBox(
+              height: 220,
+              width: 220,
+              child: _PieChart(entries: entries, totalVotes: totalVotes),
+            ),
+          ),
+          const SizedBox(height: 12),
+          ...entries.map((e) {
+            final pct = totalVotes == 0 ? 0.0 : (e.value / totalVotes) * 100.0;
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Text('${e.key}: ${e.value} votes (${pct.toStringAsFixed(1)}%)'),
+            );
+          }).toList(),
+        ],
+      ),
+    );
+  }
+}
+
+class _BarChart extends StatelessWidget {
+  final List<MapEntry<String, int>> entries;
+  final int totalVotes;
+  const _BarChart({required this.entries, required this.totalVotes});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final maxVotes = entries.isEmpty ? 1 : (entries.first.value);
+    return Column(
+      children: entries.map((e) {
+        final pct = maxVotes == 0 ? 0.0 : e.value / maxVotes;
+        final percentLabel = totalVotes == 0 ? '0.0%' : '${((e.value / totalVotes) * 100).toStringAsFixed(1)}%';
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Row(
+            children: [
+              Expanded(
+                child: Stack(
+                  children: [
+                    Container(
+                      height: 18,
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primary.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(9),
+                      ),
+                    ),
+                    FractionallySizedBox(
+                      widthFactor: pct.clamp(0.0, 1.0),
+                      child: Container(
+                        height: 18,
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primary,
+                          borderRadius: BorderRadius.circular(9),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              SizedBox(
+                width: 48,
+                child: Text(percentLabel, textAlign: TextAlign.right, style: theme.textTheme.labelMedium),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+}
+
+class _PieChart extends StatelessWidget {
+  final List<MapEntry<String, int>> entries;
+  final int totalVotes;
+  const _PieChart({required this.entries, required this.totalVotes});
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      painter: _PieChartPainter(entries: entries, totalVotes: totalVotes),
+    );
+  }
+}
+
+class _PieChartPainter extends CustomPainter {
+  final List<MapEntry<String, int>> entries;
+  final int totalVotes;
+  _PieChartPainter({required this.entries, required this.totalVotes});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final center = rect.center;
+    final radius = math.min(size.width, size.height) / 2;
+    final paint = Paint()..style = PaintingStyle.stroke..strokeWidth = radius;
+    double start = -math.pi / 2;
+    final palette = [
+      const Color(0xFF7C4DFF),
+      const Color(0xFF03A9F4),
+      const Color(0xFFFFC107),
+      const Color(0xFF4CAF50),
+      const Color(0xFFFF5722),
+      const Color(0xFFE91E63),
+      const Color(0xFF009688),
+      const Color(0xFF9C27B0),
+    ];
+
+    final tv = totalVotes == 0 ? 1 : totalVotes;
+    for (var i = 0; i < entries.length; i++) {
+      final value = entries[i].value.toDouble();
+      final sweep = (value / tv) * 2 * math.pi;
+      paint.color = palette[i % palette.length];
+      canvas.drawArc(Rect.fromCircle(center: center, radius: radius / 2), start, sweep, false, paint);
+      start += sweep;
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+}
   // Public helper to open the election/voting flow from anywhere in the Elecom student UI
-  static Future<void> openVoteFlow(BuildContext context) async {
+  Future<void> openVoteFlow(BuildContext context) async {
     final sid = UserSession.studentId ?? '';
     if (sid.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -185,7 +765,7 @@ class StudentBottomNavBar {
   }
 
   // ===== Helpers for modal flows =====
-  static Future<void> _openDirectVoting(BuildContext context) async {
+  Future<void> _openDirectVoting(BuildContext context) async {
     final sid = UserSession.studentId ?? '';
     if (sid.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -233,7 +813,7 @@ class StudentBottomNavBar {
     );
   }
 
-  static Future<void> _openElectionList(BuildContext context) async {
+  Future<void> _openElectionList(BuildContext context) async {
     final sid = UserSession.studentId ?? '';
     if (sid.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -340,7 +920,7 @@ class StudentBottomNavBar {
     );
   }
 
-  static Future<bool?> _openElectionSelection(BuildContext context, String electionId) async {
+  Future<bool?> _openElectionSelection(BuildContext context, String electionId) async {
     final sid = UserSession.studentId ?? '';
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
@@ -451,7 +1031,7 @@ class StudentBottomNavBar {
     );
   }
 
-  static Future<bool?> _openReviewSheet(
+  Future<bool?> _openReviewSheet(
     BuildContext context,
     String electionId,
     List<Map<String, String>> positions,
@@ -566,7 +1146,7 @@ class StudentBottomNavBar {
     );
   }
 
-  static Future<void> _openStatusSheet(BuildContext context) async {
+  Future<void> _openStatusSheet(BuildContext context) async {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final sid = UserSession.studentId ?? '';
@@ -665,7 +1245,7 @@ class StudentBottomNavBar {
     );
   }
 
-  static Future<bool?> _confirmProceed(BuildContext context) async {
+  Future<bool?> _confirmProceed(BuildContext context) async {
     return showDialog<bool>(
       context: context,
       barrierDismissible: true,
@@ -681,7 +1261,7 @@ class StudentBottomNavBar {
       },
     );
   }
-}
+
 
 class _DirectVoteContent extends StatefulWidget {
   final ScrollController controller;

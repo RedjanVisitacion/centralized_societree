@@ -48,6 +48,16 @@ $ddl2 = "CREATE TABLE IF NOT EXISTS vote_items (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
 if (!$mysqli->query($ddl2)) { respond(false, 'Failed to ensure vote_items table'); }
 
+// Accurate tally table for results (maintained automatically)
+$ddl3 = "CREATE TABLE IF NOT EXISTS vote_results (
+  candidate_id INT UNSIGNED NOT NULL,
+  position VARCHAR(128) NOT NULL,
+  votes INT NOT NULL DEFAULT 0,
+  PRIMARY KEY (candidate_id),
+  KEY idx_position (position)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+if (!$mysqli->query($ddl3)) { respond(false, 'Failed to ensure vote_results table'); }
+
 // Optional tally column (guarded to avoid duplicate-column fatal errors)
 try {
   if ($chk = @$mysqli->query("SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'candidates_registration' AND COLUMN_NAME = 'votes' LIMIT 1")) {
@@ -101,6 +111,16 @@ try {
 
     $incStmt->bind_param('i', $cid);
     if (!$incStmt->execute()) throw new Exception('Update candidate tally failed');
+
+    // Also update accurate tally table atomically
+    $up = $mysqli->prepare('INSERT INTO vote_results (candidate_id, position, votes) VALUES (?, ?, 1) ON DUPLICATE KEY UPDATE votes = votes + 1, position = VALUES(position)');
+    if ($up) {
+      $up->bind_param('is', $cid, $pos);
+      if (!$up->execute()) { $up->close(); throw new Exception('Update results tally failed'); }
+      $up->close();
+    } else {
+      throw new Exception('Prepare results tally failed');
+    }
   }
   $itemStmt->close();
   $incStmt->close();

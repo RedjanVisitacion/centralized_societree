@@ -28,12 +28,22 @@ try {
     CONSTRAINT fk_vote_items_vote FOREIGN KEY (vote_id) REFERENCES votes(id) ON DELETE CASCADE
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
   if (!$mysqli->query($ddl2)) { respond(false, 'Failed to ensure vote_items table'); }
+  // Ensure results table exists (and clear it as part of reset)
+  $ddl3 = "CREATE TABLE IF NOT EXISTS vote_results (
+    candidate_id INT UNSIGNED NOT NULL,
+    position VARCHAR(128) NOT NULL,
+    votes INT NOT NULL DEFAULT 0,
+    PRIMARY KEY (candidate_id),
+    KEY idx_position (position)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+  if (!$mysqli->query($ddl3)) { respond(false, 'Failed to ensure vote_results table'); }
 
   $mysqli->begin_transaction();
   try {
     // Only clear vote tables. Do NOT modify candidate tallies per request
     if (!$mysqli->query('DELETE FROM vote_items')) { throw new Exception('Failed to clear vote_items'); }
     if (!$mysqli->query('DELETE FROM votes')) { throw new Exception('Failed to clear votes'); }
+    if (!$mysqli->query('DELETE FROM vote_results')) { throw new Exception('Failed to clear vote_results'); }
 
     $mysqli->commit();
     respond(true, 'All votes have been cleared.');

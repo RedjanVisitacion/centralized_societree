@@ -203,7 +203,7 @@ class ElecomDashboardContent extends StatelessWidget {
                         elevation: 0,
                       ),
                       onPressed: voted ? null : () async {
-                        await StudentBottomNavBar.openVoteFlow(context);
+                        await openVoteFlow(context);
                       },
                       child: const Text('Vote Now'),
                     ),
