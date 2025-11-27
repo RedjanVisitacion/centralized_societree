@@ -199,7 +199,7 @@ class StudentBottomNavBar {
                   clipBehavior: Clip.antiAlias,
                   child: Material(
                     color: sheetColor,
-                    child: const _ResultsChartsSheet(),
+                    child: _ResultsChartsSheet(controller: controller),
                   ),
                 );
               },
@@ -212,7 +212,8 @@ class StudentBottomNavBar {
 }
 
 class _ResultsChartsSheet extends StatefulWidget {
-  const _ResultsChartsSheet();
+  final ScrollController controller;
+  const _ResultsChartsSheet({required this.controller});
   @override
   State<_ResultsChartsSheet> createState() => _ResultsChartsSheetState();
 }
@@ -301,36 +302,38 @@ class _ResultsChartsSheetState extends State<_ResultsChartsSheet> {
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-        child: SizedBox(
-          height: MediaQuery.of(context).size.height * 0.8,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Text('Election Results', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
-                  const Spacer(),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.of(context).pop(),
+        child: ListView(
+          controller: widget.controller,
+          children: [
+            Row(
+              children: [
+                Text('Election Results', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+                const Spacer(),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (_loading)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 40),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (_error != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Center(
+                  child: Text(
+                    _error!,
+                    style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.error),
                   ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Expanded(
-                child: _loading
-                    ? const Center(child: CircularProgressIndicator())
-                    : (_error != null
-                        ? Center(
-                            child: Text(
-                              _error!,
-                              style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.error),
-                            ),
-                          )
-                        : _buildResultsBody(theme)),
-              ),
-            ],
-          ),
+                ),
+              )
+            else
+              _buildResultsBody(theme),
+          ],
         ),
       ),
     );
@@ -459,11 +462,9 @@ class _ResultsChartsSheetState extends State<_ResultsChartsSheet> {
           overview,
           filterRow,
           const SizedBox(height: 12),
-          Expanded(
-            child: _ResultsSectionCard(
-              title: _selectedPos!,
-              child: _ResultsCharts(items: filtered.isNotEmpty ? filtered : _items),
-            ),
+          _ResultsSectionCard(
+            title: _selectedPos!,
+            child: _ResultsCharts(items: filtered.isNotEmpty ? filtered : _items),
           ),
         ],
       );
@@ -483,19 +484,19 @@ class _ResultsChartsSheetState extends State<_ResultsChartsSheet> {
         overview,
         filterRow,
         const SizedBox(height: 12),
-        Expanded(
-          child: ListView.separated(
-            itemCount: posKeys.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 10),
-            itemBuilder: (ctx, i) {
-              final pos = posKeys[i];
-              final items = byPos[pos]!..sort((a, b) => b.votes.compareTo(a.votes));
-              return _ResultsSectionCard(
-                title: pos,
-                child: _ResultsCharts(items: items),
-              );
-            },
-          ),
+        ListView.separated(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: posKeys.length,
+          separatorBuilder: (_, __) => const SizedBox(height: 10),
+          itemBuilder: (ctx, i) {
+            final pos = posKeys[i];
+            final items = byPos[pos]!..sort((a, b) => b.votes.compareTo(a.votes));
+            return _ResultsSectionCard(
+              title: pos,
+              child: _ResultsCharts(items: items),
+            );
+          },
         ),
       ],
     );
