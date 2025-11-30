@@ -569,13 +569,20 @@ class _CandidateCard extends StatelessWidget {
                 child: SizedBox(
                   width: 40,
                   height: 40,
-                  child: (item.photoUrl.isNotEmpty)
-                      ? Image.network(
-                          item.photoUrl,
+                  child: FutureBuilder<String?>(
+                    future: _PhotoResolver.resolve(item.name, item.photoUrl),
+                    builder: (context, snap) {
+                      final url = snap.data;
+                      if (url != null && url.isNotEmpty) {
+                        return Image.network(
+                          url,
                           fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => Container(color: Colors.grey.shade200, child: const Icon(Icons.person, size: 24, color: Colors.grey)),
-                        )
-                      : Container(color: Colors.grey.shade200, child: Center(child: Text(_initials(item.name), style: const TextStyle(fontWeight: FontWeight.w700)))),
+                        );
+                      }
+                      return Container(color: Colors.grey.shade200, child: const Icon(Icons.person, size: 24, color: Colors.grey));
+                    },
+                  ),
                 ),
               ),
               const SizedBox(width: 12),
@@ -632,6 +639,44 @@ class _CandidateCard extends StatelessWidget {
     if (parts.isEmpty) return '?';
     if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
     return (parts.first[0] + parts.last[0]).toUpperCase();
+  }
+}
+
+class _PhotoResolver {
+  static Future<String?> resolve(String name, String photoUrl) async {
+    // Prefer explicit URL if provided and valid
+    final List<String> candidates = [];
+    if (photoUrl.isNotEmpty) candidates.add(photoUrl);
+
+    // Build name variants for backend resolver endpoint
+    final trimmed = name.trim();
+    final noDots = trimmed.replaceAll('.', '');
+    final parts = trimmed.split(RegExp(r'\s+'));
+    final noInitials = parts.where((p) => p.length > 2).join(' ');
+
+    final base = apiBaseUrl.endsWith('/') ? apiBaseUrl.substring(0, apiBaseUrl.length - 1) : apiBaseUrl;
+    String enc(String s) => Uri.encodeComponent(s);
+    String encPlus(String s) => enc(s).replaceAll('%20', '+');
+
+    final paths = <String>[
+      '$base/get_candidate_photo.php?name=${enc(trimmed)}',
+      '$base/get_candidate_photo.php?name=${encPlus(trimmed)}',
+      '$base/get_candidate_photo.php?name=${enc(noDots)}',
+      '$base/get_candidate_photo.php?name=${encPlus(noDots)}',
+      if (noInitials != trimmed) '$base/get_candidate_photo.php?name=${enc(noInitials)}',
+      if (noInitials != trimmed) '$base/get_candidate_photo.php?name=${encPlus(noInitials)}',
+    ];
+    candidates.addAll(paths);
+
+    for (final u in candidates) {
+      try {
+        final res = await http.head(Uri.parse(u)).timeout(const Duration(seconds: 5));
+        if (res.statusCode >= 200 && res.statusCode < 300) return u;
+      } catch (_) {
+        // try next
+      }
+    }
+    return null;
   }
 }
 

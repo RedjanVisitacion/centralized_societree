@@ -5,6 +5,8 @@ import 'package:centralized_societree/services/user_session.dart';
 import 'package:centralized_societree/modules/elecom/student_dashboard/services/student_dashboard_service.dart';
 import 'package:centralized_societree/modules/elecom/services/elecom_voting_service.dart';
 import 'package:centralized_societree/modules/elecom/voting/voting_receipt_screen.dart';
+import 'package:http/http.dart' as http;
+import 'package:centralized_societree/config/api_config.dart';
 
 class VotingScreen extends StatefulWidget {
   const VotingScreen({super.key});
@@ -27,6 +29,33 @@ class _VotingScreenState extends State<VotingScreen> {
     if (u.contains('PAFE')) return 'PAFE';
     if (u.contains('AFPROTECHS') || u.contains('APFROTECHS')) return 'APFROTECHS';
     return s.toUpperCase().trim();
+  }
+
+  Future<String?> _resolvePhoto(String name, String photoUrl) async {
+    final List<String> candidates = [];
+    if (photoUrl.isNotEmpty) candidates.add(photoUrl);
+    final trimmed = name.trim();
+    final noDots = trimmed.replaceAll('.', '');
+    final parts = trimmed.split(RegExp(r'\s+'));
+    final noInitials = parts.where((p) => p.length > 2).join(' ');
+    final base = apiBaseUrl.endsWith('/') ? apiBaseUrl.substring(0, apiBaseUrl.length - 1) : apiBaseUrl;
+    String enc(String s) => Uri.encodeComponent(s);
+    String encPlus(String s) => enc(s).replaceAll('%20', '+');
+    candidates.addAll([
+      '$base/get_candidate_photo.php?name=${enc(trimmed)}',
+      '$base/get_candidate_photo.php?name=${encPlus(trimmed)}',
+      '$base/get_candidate_photo.php?name=${enc(noDots)}',
+      '$base/get_candidate_photo.php?name=${encPlus(noDots)}',
+      if (noInitials != trimmed) '$base/get_candidate_photo.php?name=${enc(noInitials)}',
+      if (noInitials != trimmed) '$base/get_candidate_photo.php?name=${encPlus(noInitials)}',
+    ]);
+    for (final u in candidates) {
+      try {
+        final res = await http.head(Uri.parse(u)).timeout(const Duration(seconds: 4));
+        if (res.statusCode >= 200 && res.statusCode < 300) return u;
+      } catch (_) {}
+    }
+    return null;
   }
 
   String _deriveOrg(Map<String, dynamic> c) {
@@ -397,15 +426,25 @@ class _VotingScreenState extends State<VotingScreen> {
                                                   final isSel = id.isNotEmpty && id == selected;
                                                   return ListTile(
                                                     contentPadding: EdgeInsets.zero,
-                                                    leading: CircleAvatar(
-                                                      backgroundColor: isDark ? Colors.grey[800] : const Color(0xFFEAEAEA),
-                                                      foregroundColor: isDark ? Colors.white70 : Colors.grey,
-                                                      backgroundImage: ((c['photoUrl'] ?? '') as String).isNotEmpty
-                                                          ? NetworkImage(c['photoUrl'] as String)
-                                                          : null,
-                                                      child: (((c['photoUrl'] ?? '') as String).isEmpty)
-                                                          ? const Icon(Icons.person)
-                                                          : null,
+                                                    leading: ClipOval(
+                                                      child: SizedBox(
+                                                        width: 40,
+                                                        height: 40,
+                                                        child: FutureBuilder<String?>(
+                                                          future: _resolvePhoto((c['name'] ?? '').toString(), (c['photoUrl'] ?? '').toString()),
+                                                          builder: (context, snap) {
+                                                            final url = snap.data;
+                                                            if (url != null && url.isNotEmpty) {
+                                                              return Image.network(
+                                                                url,
+                                                                fit: BoxFit.cover,
+                                                                errorBuilder: (_, __, ___) => Container(color: Colors.grey.shade200, child: const Icon(Icons.person, size: 24, color: Colors.grey)),
+                                                              );
+                                                            }
+                                                            return Container(color: isDark ? Colors.grey[800] : const Color(0xFFEAEAEA), child: const Icon(Icons.person, size: 24, color: Colors.grey));
+                                                          },
+                                                        ),
+                                                      ),
                                                     ),
                                                     title: Text(
                                                       (c['name'] ?? '').toString(),
