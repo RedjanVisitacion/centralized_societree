@@ -19,16 +19,20 @@ $ddl = "CREATE TABLE IF NOT EXISTS user_notifications (
   body TEXT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   read_at TIMESTAMP NULL DEFAULT NULL,
+  pinned TINYINT(1) NOT NULL DEFAULT 0,
   PRIMARY KEY (id),
   KEY idx_student_created (student_id, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
 $mysqli->query($ddl);
 
+// Migration: ensure pinned column exists on older installs
+@ $mysqli->query("ALTER TABLE user_notifications ADD COLUMN pinned TINYINT(1) NOT NULL DEFAULT 0");
+
 // Load current notifications
-$sql = "SELECT id, type, title, body, created_at, read_at
+$sql = "SELECT id, type, title, body, created_at, read_at, pinned
         FROM user_notifications
         WHERE student_id = ?
-        ORDER BY created_at DESC, id DESC
+        ORDER BY pinned DESC, created_at DESC, id DESC
         LIMIT ?";
 $stmt = $mysqli->prepare($sql);
 if (!$stmt) { http_response_code(500); echo json_encode(['success'=>false,'message'=>'DB error']); exit(); }

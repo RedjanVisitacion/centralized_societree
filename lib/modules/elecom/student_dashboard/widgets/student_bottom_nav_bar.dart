@@ -18,6 +18,9 @@ class StudentBottomNavBar {
   static String? _lastSeenTs; // ISO string
   static String? _latestServerTs; // ISO string
   static Timer? _notifTimer;
+  // Results visibility for dynamic bottom bar labeling
+  static final ValueNotifier<bool> _resultsVisible = ValueNotifier<bool>(false);
+  static Timer? _windowTimer;
 
   static Widget? build({
     required BuildContext context,
@@ -34,6 +37,11 @@ class StudentBottomNavBar {
     // Start background polling every 30s to detect new notifications
     _notifTimer ??= Timer.periodic(const Duration(seconds: 30), (_) {
       _refreshNotifications();
+    });
+    // Refresh results visibility now and every 60s
+    _refreshResultsVisibility();
+    _windowTimer ??= Timer.periodic(const Duration(seconds: 60), (_) {
+      _refreshResultsVisibility();
     });
 
     Widget wrappedNavBar = ListenableBuilder(
@@ -63,17 +71,20 @@ class StudentBottomNavBar {
                           ? Colors.grey[800]
                           : Colors.grey[300],
                     ),
-                    BottomNavigationBar(
-                      backgroundColor: currentIsDarkMode
-                          ? const Color(0xFF121212)
-                          : theme.scaffoldBackgroundColor,
-                      selectedItemColor: currentIsDarkMode
-                          ? Colors.white
-                          : theme.colorScheme.primary,
-                      unselectedItemColor: currentIsDarkMode
-                          ? Colors.white70
-                          : Colors.grey[600],
-                      selectedLabelStyle: TextStyle(
+                    ValueListenableBuilder<bool>(
+                      valueListenable: _resultsVisible,
+                      builder: (context, resVisible, _) {
+                        return BottomNavigationBar(
+                          backgroundColor: currentIsDarkMode
+                              ? const Color(0xFF121212)
+                              : theme.scaffoldBackgroundColor,
+                          selectedItemColor: currentIsDarkMode
+                              ? Colors.white
+                              : theme.colorScheme.primary,
+                          unselectedItemColor: currentIsDarkMode
+                              ? Colors.white70
+                              : Colors.grey[600],
+                          selectedLabelStyle: TextStyle(
                         color: currentIsDarkMode ? Colors.white : null,
                       ),
                       unselectedLabelStyle: TextStyle(
@@ -86,8 +97,121 @@ class StudentBottomNavBar {
                           openVoteFlow(context);
                           return;
                         }
+
+  Future<void> _openWinnersSheet(BuildContext context) async {
+    final currentIsDarkMode = themeNotifier.isDarkMode;
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        final sheetColor = currentIsDarkMode ? const Color(0xFF121212) : theme.scaffoldBackgroundColor;
+
+        Future<Map<String, String>> loadSummary() async {
+          final sid = UserSession.studentId ?? '';
+          if (sid.isEmpty) return {'title': 'Winners', 'body': 'Login required.'};
+          try {
+            final res = await http
+                .post(Uri.parse('$apiBaseUrl/user_results_summary.php'), body: {'student_id': sid})
+                .timeout(const Duration(seconds: 10));
+            final json = ElecomVotingService.decodeJson(res.body);
+            if (json is Map && json['success'] == true) {
+              final title = (json['title'] ?? 'Winners').toString();
+              final body = (json['body'] ?? '').toString();
+              return {'title': title, 'body': body};
+            }
+          } catch (_) {}
+          return {'title': 'Winners', 'body': ''};
+        }
+
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                child: Container(color: Colors.black.withOpacity(0.15)),
+              ),
+            ),
+            DraggableScrollableSheet(
+              expand: false,
+              initialChildSize: 0.9,
+              maxChildSize: 0.95,
+              minChildSize: 0.5,
+              builder: (_, controller) {
+                return Container(
+                  decoration: const BoxDecoration(
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Material(
+                    color: sheetColor,
+                    child: SafeArea(
+                      top: false,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                        child: FutureBuilder<Map<String, String>>(
+                          future: loadSummary(),
+                          builder: (context, snap) {
+                            final loading = snap.connectionState != ConnectionState.done;
+                            final title = snap.data?['title'] ?? 'Winners';
+                            final body = snap.data?['body'] ?? '';
+                            final lines = body
+                                .replaceAll('\r', '')
+                                .split('\n')
+                                .map((s) => s.trim())
+                                .where((s) => s.isNotEmpty)
+                                .toList();
+
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(Icons.emoji_events_outlined, color: Colors.amber[700]),
+                                    const SizedBox(width: 8),
+                                    Text(title, style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+                                    const Spacer(),
+                                    IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.of(ctx).pop()),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                if (loading) const Expanded(child: Center(child: CircularProgressIndicator()))
+                                else Expanded(
+                                  child: ListView.builder(
+                                    controller: controller,
+                                    itemCount: lines.length,
+                                    itemBuilder: (_, i) {
+                                      final text = lines[i];
+                                      return ListTile(
+                                        dense: true,
+                                        leading: const Icon(Icons.check_circle_outline, color: Colors.green),
+                                        title: Text(text, style: theme.textTheme.bodyLarge),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
                         if (i == 2) {
-                          _openResultsSheet(context);
+                          if (_resultsVisible.value) {
+                            _openWinnersSheet(context);
+                          } else {
+                            _openResultsSheet(context);
+                          }
                           return;
                         }
                         if (i == 3) {
@@ -140,14 +264,14 @@ class StudentBottomNavBar {
                         ),
                         BottomNavigationBarItem(
                           icon: Icon(
-                            Icons.analytics_outlined,
+                            resVisible ? Icons.emoji_events_outlined : Icons.analytics_outlined,
                             color: currentIsDarkMode ? Colors.white70 : null,
                           ),
                           activeIcon: Icon(
-                            Icons.analytics_outlined,
+                            resVisible ? Icons.emoji_events_outlined : Icons.analytics_outlined,
                             color: currentIsDarkMode ? Colors.white : null,
                           ),
-                          label: 'Results',
+                          label: resVisible ? 'Winners' : 'Results',
                         ),
                         BottomNavigationBarItem(
                           icon: Icon(
@@ -222,6 +346,8 @@ class StudentBottomNavBar {
                           label: 'Notifications',
                         ),
                       ],
+                        );
+                      },
                     ),
                   ],
                 ),
@@ -249,6 +375,28 @@ class StudentBottomNavBar {
     }
 
     return wrappedNavBar;
+  }
+
+  static Future<void> _refreshResultsVisibility() async {
+    try {
+      final uri = Uri.parse('$apiBaseUrl/get_vote_window.php');
+      final res = await http.get(uri).timeout(const Duration(seconds: 8));
+      final json = ElecomVotingService.decodeJson(res.body);
+      bool visible = false;
+      if (json is Map && json['success'] == true && json['window'] is Map) {
+        final w = (json['window'] as Map).cast<String, dynamic>();
+        final endAt = w['end_at']?.toString();
+        final resultsAt = w['results_at']?.toString();
+        if (resultsAt != null && resultsAt.isNotEmpty) {
+          visible = DateTime.now().isAfter(DateTime.parse(resultsAt));
+        } else if (endAt != null && endAt.isNotEmpty) {
+          visible = DateTime.now().isAfter(DateTime.parse(endAt));
+        }
+      }
+      if (_resultsVisible.value != visible) {
+        _resultsVisible.value = visible;
+      }
+    } catch (_) {}
   }
 
   static Future<void> _openResultsSheet(BuildContext context) async {
@@ -330,6 +478,28 @@ class StudentBottomNavBar {
 
         Future<(Map<String, dynamic>?, List<Map<String, dynamic>>)> loadBoth() async {
           final w = await loadWindow();
+          // If results are visible, ask backend to create/update a single summary notification for this student
+          final sid = UserSession.studentId ?? '';
+          if (sid.isNotEmpty && w != null) {
+            try {
+              final startAt = w['start_at']?.toString();
+              final endAt = w['end_at']?.toString();
+              final resultsAt = w['results_at']?.toString();
+              bool resultsVisible;
+              if (resultsAt != null && resultsAt.isNotEmpty) {
+                resultsVisible = DateTime.now().isAfter(DateTime.parse(resultsAt));
+              } else if (endAt != null && endAt.isNotEmpty) {
+                resultsVisible = DateTime.now().isAfter(DateTime.parse(endAt));
+              } else {
+                resultsVisible = false;
+              }
+              if (resultsVisible) {
+                await http
+                    .post(Uri.parse('$apiBaseUrl/user_results_summary.php'), body: {'student_id': sid})
+                    .timeout(const Duration(seconds: 8));
+              }
+            } catch (_) {}
+          }
           final n = await loadUserNotifications();
           return (w, n);
         }
@@ -341,6 +511,20 @@ class StudentBottomNavBar {
 
         bool isPast(String? iso) {
           try { return iso != null && iso.isNotEmpty && DateTime.now().isAfter(DateTime.parse(iso)); } catch (_) { return false; }
+        }
+
+        String rel(String? iso) {
+          if (iso == null || iso.isEmpty) return '';
+          try {
+            final t = DateTime.parse(iso);
+            final now = DateTime.now();
+            final d = now.difference(t);
+            if (d.inSeconds < 60) return '${d.inSeconds}s ago';
+            if (d.inMinutes < 60) return '${d.inMinutes}m ago';
+            if (d.inHours < 24) return '${d.inHours}h ago';
+            if (d.inDays < 7) return '${d.inDays}d ago';
+            return DateFormat('MMM d').format(t);
+          } catch (_) { return ''; }
         }
 
         return Stack(
@@ -403,18 +587,141 @@ class StudentBottomNavBar {
                                       controller: controller,
                                       children: [
                                         if (userNotifs.isNotEmpty) ...[
-                                          Padding(
-                                            padding: const EdgeInsets.only(left: 12, top: 4, bottom: 6),
-                                            child: Text('Your Notifications', style: theme.textTheme.labelLarge),
-                                          ),
                                           ...userNotifs.map((n) {
                                             final t = (n['title'] ?? '').toString();
                                             final b = (n['body'] ?? '').toString();
                                             final ts = (n['created_at'] ?? '').toString();
-                                            return ListTile(
-                                              leading: const Icon(Icons.notifications_active_outlined),
-                                              title: Text(t.isEmpty ? 'Notification' : t),
-                                              subtitle: Text(b.isNotEmpty ? b : fmt(ts)),
+                                            final idVal = int.tryParse((n['id'] ?? '').toString()) ?? (n['id'] is int ? n['id'] as int : 0);
+                                            final readAt = (n['read_at'] ?? '').toString();
+                                            final unread = readAt.isEmpty;
+                                            final pinned = ((n['pinned'] ?? 0).toString() == '1');
+                                            final tl = t.trim().toLowerCase();
+                                            final isResults = tl.startsWith('winners announced') || tl.startsWith('election results');
+                                            final iconColor = isResults
+                                                ? Colors.amber[700]
+                                                : (unread ? theme.colorScheme.primary : (theme.brightness == Brightness.dark ? Colors.white70 : Colors.grey[600]));
+                                            final titleStyle = theme.textTheme.bodyLarge?.copyWith(fontWeight: unread ? FontWeight.w700 : FontWeight.w500);
+                                            final timeText = (rel(ts).isNotEmpty ? rel(ts) : fmt(ts));
+                                            String resultsPreview = '';
+                                            if (isResults && b.isNotEmpty) {
+                                              final lines = b.replaceAll('\r', '').split('\n').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+                                              resultsPreview = lines.take(2).join(' • ');
+                                              if (lines.length > 2) resultsPreview += ' • …';
+                                            }
+                                            return Container(
+                                              decoration: BoxDecoration(
+                                                color: pinned
+                                                    ? theme.colorScheme.secondaryContainer
+                                                    : (unread ? (theme.colorScheme.primary.withOpacity(0.08)) : Colors.transparent),
+                                                borderRadius: const BorderRadius.all(Radius.circular(10)),
+                                              ),
+                                              margin: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
+                                              child: ListTile(
+                                                contentPadding: const EdgeInsets.only(left: 12, right: 6),
+                                                leading: Icon(isResults ? Icons.emoji_events_outlined : Icons.notifications_active_outlined, color: iconColor),
+                                                title: Row(
+                                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                                  children: [
+                                                    Expanded(child: Text(t.isEmpty ? 'Notification' : t, style: titleStyle)),
+                                                    if (pinned)
+                                                      Padding(
+                                                        padding: const EdgeInsets.only(left: 6),
+                                                        child: Icon(
+                                                          Icons.push_pin,
+                                                          size: 16,
+                                                          color: theme.colorScheme.onSecondaryContainer,
+                                                        ),
+                                                      ),
+                                                  ],
+                                                ),
+                                                subtitle: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    if (!isResults && b.isNotEmpty)
+                                                      Text(b, style: theme.textTheme.bodyMedium),
+                                                    if (isResults && resultsPreview.isNotEmpty)
+                                                      Text(resultsPreview, style: theme.textTheme.bodyMedium),
+                                                    Text(
+                                                      timeText,
+                                                      style: theme.textTheme.bodySmall?.copyWith(
+                                                        color: theme.brightness == Brightness.dark ? Colors.white70 : Colors.grey[600],
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                onTap: () async {
+                                                  if (isResults) {
+                                                    if (Navigator.of(ctx).canPop()) Navigator.of(ctx).pop();
+                                                    await Future.delayed(const Duration(milliseconds: 100));
+                                                    if (context.mounted) {
+                                                      _openResultsSheet(context);
+                                                    }
+                                                  }
+                                                },
+                                                trailing: PopupMenuButton<String>(
+                                                  padding: EdgeInsets.zero,
+                                                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                                                  icon: Icon(
+                                                    Icons.more_horiz_rounded,
+                                                    size: 18,
+                                                    color: theme.brightness == Brightness.dark ? Colors.white70 : Colors.grey[700],
+                                                  ),
+                                                  onSelected: (val) async {
+                                                    final sid = UserSession.studentId ?? '';
+                                                    if (sid.isEmpty || idVal <= 0) return;
+                                                    try {
+                                                      if (val == 'pin') {
+                                                        await http
+                                                            .post(Uri.parse('$apiBaseUrl/user_notifications_pin.php'), body: {
+                                                              'student_id': sid,
+                                                              'id': idVal.toString(),
+                                                              'pinned': pinned ? '0' : '1',
+                                                            })
+                                                            .timeout(const Duration(seconds: 8));
+                                                      } else if (val == 'delete') {
+                                                        await http
+                                                            .post(Uri.parse('$apiBaseUrl/user_notifications_delete.php'), body: {
+                                                              'student_id': sid,
+                                                              'id': idVal.toString(),
+                                                            })
+                                                            .timeout(const Duration(seconds: 8));
+                                                      }
+                                                    } catch (_) {}
+                                                    // Refresh badge and list by closing and reopening
+                                                    _refreshNotifications();
+                                                    if (context.mounted) {
+                                                      await Navigator.of(context).maybePop();
+                                                    }
+                                                    await Future.delayed(const Duration(milliseconds: 150));
+                                                    if (context.mounted) {
+                                                      _openNotificationsSheet(context);
+                                                    }
+                                                  },
+                                                  itemBuilder: (c) => [
+                                                    PopupMenuItem<String>(
+                                                      value: 'pin',
+                                                      child: Row(
+                                                        children: [
+                                                          Icon(pinned ? Icons.push_pin : Icons.push_pin_outlined, size: 18),
+                                                          const SizedBox(width: 8),
+                                                          Text(pinned ? 'Unpin' : 'Pin'),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                    const PopupMenuItem<String>(
+                                                      value: 'delete',
+                                                      child: Row(
+                                                        children: [
+                                                          Icon(Icons.delete_outline, size: 18),
+                                                          SizedBox(width: 8),
+                                                          Text('Delete'),
+                                                        ],
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
                                             );
                                           }),
                                           const Divider(),
