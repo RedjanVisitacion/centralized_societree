@@ -10,6 +10,8 @@ class ElecomDashboardContent extends StatelessWidget {
   final Duration remaining;
   final bool voted;
   final String? selectedCandidate;
+  final bool canVote;
+  final bool notStarted;
   final List<Map<String, dynamic>> parties;
   final bool loadingParties;
   final bool showAllParties;
@@ -23,6 +25,8 @@ class ElecomDashboardContent extends StatelessWidget {
     required this.theme,
     required this.remaining,
     required this.voted,
+    required this.canVote,
+    required this.notStarted,
     this.selectedCandidate,
     required this.parties,
     required this.loadingParties,
@@ -219,9 +223,13 @@ class ElecomDashboardContent extends StatelessWidget {
                         ),
                         const SizedBox(height: 10),
                         Text(
-                          days > 0
-                              ? 'You have $days days left to vote. Don\'t miss your chance!'
-                              : 'Voting closes soon!',
+                          notStarted
+                              ? 'Voting has not started yet.'
+                              : (!canVote
+                                  ? 'Voting has ended.'
+                                  : (days > 0
+                                      ? 'You have $days days left to vote. Don\'t miss your chance!'
+                                      : 'Voting closes soon!')),
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: const Color(0xFFFFE4E4),
                           ),
@@ -242,10 +250,8 @@ class ElecomDashboardContent extends StatelessWidget {
                               ),
                               elevation: 0,
                             ),
-                            onPressed: () async {
-                              await openVoteFlow(context);
-                            },
-                            child: const Text('Vote Now'),
+                            onPressed: canVote ? () async { await openVoteFlow(context); } : null,
+                            child: Text(canVote ? 'Vote Now' : (notStarted ? 'Not Started' : 'Voting Closed')),
                           ),
                         ),
                       ],

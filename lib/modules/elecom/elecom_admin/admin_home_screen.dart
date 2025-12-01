@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:centralized_societree/config/api_config.dart';
 import 'package:centralized_societree/modules/elecom/services/elecom_voting_service.dart';
+import 'package:centralized_societree/modules/elecom/elecom_admin/vote_window_screen.dart';
 
 class AdminHomeScreen extends StatelessWidget {
   const AdminHomeScreen({super.key});
@@ -383,6 +384,18 @@ class AdminHomeScreen extends StatelessWidget {
                         },
                       );
                     },
+                  );
+                },
+              ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                icon: const Icon(Icons.event_available_outlined),
+                label: const Text('Set Election Dates'),
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const VoteWindowScreen(),
+                    ),
                   );
                 },
               ),

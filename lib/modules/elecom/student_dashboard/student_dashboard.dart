@@ -7,6 +7,8 @@ import 'dart:ui';
 import 'services/student_dashboard_service.dart';
 import '../services/elecom_voting_service.dart';
 import '../../../services/user_session.dart';
+import 'package:http/http.dart' as http;
+import 'package:centralized_societree/config/api_config.dart';
 import 'widgets/student_dashboard_appbar.dart';
 import 'widgets/student_bottom_nav_bar.dart';
 import 'widgets/elecom_dashboard_content.dart';
@@ -99,7 +101,8 @@ class StudentDashboard extends StatefulWidget {
 class _StudentDashboardState extends State<StudentDashboard> {
   String? _selectedCandidate;
   bool _voted = false;
-  late DateTime _electionEnd;
+  DateTime? _electionStart;
+  DateTime? _electionEnd;
   Timer? _ticker;
   Duration _remaining = Duration.zero;
   List<Map<String, dynamic>> _parties = const [];
@@ -116,9 +119,8 @@ class _StudentDashboardState extends State<StudentDashboard> {
   @override
   void initState() {
     super.initState();
-    _electionEnd = DateTime.now().add(
-      const Duration(days: 3, hours: 2, minutes: 38, seconds: 12),
-    );
+    // Load election window from backend
+    _loadVoteWindow();
     _tick();
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) => _tick());
     _loadParties();
@@ -170,10 +172,34 @@ class _StudentDashboardState extends State<StudentDashboard> {
   void _tick() {
     final now = DateTime.now();
     setState(() {
-      _remaining = _electionEnd.isAfter(now)
-          ? _electionEnd.difference(now)
-          : Duration.zero;
+      Duration rem = Duration.zero;
+      final start = _electionStart;
+      final end = _electionEnd;
+      if (end != null) {
+        if (end.isAfter(now)) {
+          // If election hasn't started but we only have end, still count to end
+          rem = end.difference(now);
+        }
+      } else if (start != null) {
+        if (start.isAfter(now)) rem = start.difference(now);
+      }
+      _remaining = rem;
     });
+  }
+
+  bool _computeCanVote() {
+    final now = DateTime.now();
+    final s = _electionStart;
+    final e = _electionEnd;
+    if (s == null || e == null) return true; // if not configured, allow
+    return now.isAfter(s) && now.isBefore(e);
+  }
+
+  bool _computeNotStarted() {
+    final now = DateTime.now();
+    final s = _electionStart;
+    if (s == null) return false;
+    return now.isBefore(s);
   }
 
   Future<void> _loadParties() async {
@@ -196,7 +222,37 @@ class _StudentDashboardState extends State<StudentDashboard> {
   }
 
   Future<void> _refreshData() async {
-    await Future.wait([_loadParties(), _loadCandidates(), _checkVotedStatus()]);
+    await Future.wait([
+      _loadParties(),
+      _loadCandidates(),
+      _checkVotedStatus(),
+      _loadVoteWindow(),
+    ]);
+  }
+
+  Future<void> _loadVoteWindow() async {
+    try {
+      final uri = Uri.parse('$apiBaseUrl/get_vote_window.php');
+      final res = await http.get(uri).timeout(const Duration(seconds: 10));
+      final decoded = ElecomVotingService.decodeJson(res.body);
+      if (decoded is Map<String, dynamic> && decoded['success'] == true) {
+        final w = decoded['window'];
+        if (w is Map) {
+          final s = w['start_at']?.toString();
+          final e = w['end_at']?.toString();
+          DateTime? start;
+          DateTime? end;
+          try { if (s != null && s.isNotEmpty) start = DateTime.parse(s); } catch (_) {}
+          try { if (e != null && e.isNotEmpty) end = DateTime.parse(e); } catch (_) {}
+          setState(() {
+            _electionStart = start;
+            _electionEnd = end;
+          });
+        }
+      }
+    } catch (_) {
+      // Leave previous values on network error
+    }
   }
 
   Future<void> _checkVotedStatus() async {
@@ -337,6 +393,8 @@ class _StudentDashboardState extends State<StudentDashboard> {
                         theme: theme,
                         remaining: _remaining,
                         voted: _voted,
+                        canVote: _computeCanVote(),
+                        notStarted: _computeNotStarted(),
                         selectedCandidate: _selectedCandidate,
                         parties: _parties,
                         loadingParties: _loadingParties,

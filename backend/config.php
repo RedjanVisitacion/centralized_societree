@@ -107,6 +107,22 @@ function db_connect() {
     exit();
   }
 
+  // Ensure vote_windows table exists to control voting schedule
+  $createVoteWindows = "CREATE TABLE IF NOT EXISTS vote_windows (
+      id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      start_at DATETIME NULL,
+      end_at DATETIME NULL,
+      results_at DATETIME NULL,
+      note VARCHAR(255) NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
+  if (!$mysqli->query($createVoteWindows)) {
+    http_response_code(500);
+    echo json_encode(['success' => false, 'message' => 'Failed creating vote_windows table']);
+    exit();
+  }
+
   // Ensure vote_receipts table exists for quick receipt retrieval
   $createVoteReceipts = "CREATE TABLE IF NOT EXISTS vote_receipts (
       id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,

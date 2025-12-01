@@ -9,9 +9,16 @@ import 'package:centralized_societree/modules/elecom/voting/voting_screen.dart';
 import 'package:centralized_societree/modules/elecom/voting/voting_receipt_screen.dart';
 import 'dart:math' as math;
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 import 'package:centralized_societree/config/api_config.dart';
 
 class StudentBottomNavBar {
+  // Session-scoped notification state
+  static final ValueNotifier<int> _unreadCount = ValueNotifier<int>(0);
+  static String? _lastSeenTs; // ISO string
+  static String? _latestServerTs; // ISO string
+  static Timer? _notifTimer;
+
   static Widget? build({
     required BuildContext context,
     required bool isElecom,
@@ -21,6 +28,13 @@ class StudentBottomNavBar {
     if (!isElecom) return null;
 
     final theme = Theme.of(context);
+
+    // Best-effort refresh of notification timestamp each build
+    _refreshNotifications();
+    // Start background polling every 30s to detect new notifications
+    _notifTimer ??= Timer.periodic(const Duration(seconds: 30), (_) {
+      _refreshNotifications();
+    });
 
     Widget wrappedNavBar = ListenableBuilder(
       listenable: themeNotifier,
@@ -80,6 +94,10 @@ class StudentBottomNavBar {
                           _openReceipt(context);
                           return;
                         }
+                        if (i == 4) {
+                          _openNotificationsSheet(context);
+                          return;
+                        }
                         if (i != 0) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
@@ -89,6 +107,7 @@ class StudentBottomNavBar {
                                   'Election',
                                   'Results',
                                   'Receipt',
+                                  'Notifications',
                                 ][i],
                               ),
                             ),
@@ -140,6 +159,67 @@ class StudentBottomNavBar {
                             color: currentIsDarkMode ? Colors.white : null,
                           ),
                           label: 'Receipt',
+                        ),
+                        BottomNavigationBarItem(
+                          icon: ValueListenableBuilder<int>(
+                            valueListenable: _unreadCount,
+                            builder: (_, count, __) {
+                              final base = Icon(
+                                Icons.notifications_outlined,
+                                color: currentIsDarkMode ? Colors.white70 : null,
+                              );
+                              if (count <= 0) return base;
+                              final text = count > 9 ? '9+' : count.toString();
+                              return Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  base,
+                                  Positioned(
+                                    right: -4,
+                                    top: -4,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                      decoration: const BoxDecoration(color: Colors.red, borderRadius: BorderRadius.all(Radius.circular(9))),
+                                      constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                                      child: Center(
+                                        child: Text(text, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
+                          activeIcon: ValueListenableBuilder<int>(
+                            valueListenable: _unreadCount,
+                            builder: (_, count, __) {
+                              final base = Icon(
+                                Icons.notifications_outlined,
+                                color: currentIsDarkMode ? Colors.white : null,
+                              );
+                              if (count <= 0) return base;
+                              final text = count > 9 ? '9+' : count.toString();
+                              return Stack(
+                                clipBehavior: Clip.none,
+                                children: [
+                                  base,
+                                  Positioned(
+                                    right: -6,
+                                    top: -6,
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                      decoration: const BoxDecoration(color: Colors.red, borderRadius: BorderRadius.all(Radius.circular(9))),
+                                      constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                                      child: Center(
+                                        child: Text(text, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700)),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
+                          label: 'Notifications',
                         ),
                       ],
                     ),
@@ -210,6 +290,197 @@ class StudentBottomNavBar {
         );
       },
     );
+  }
+
+  static Future<void> _openNotificationsSheet(BuildContext context) async {
+    final currentIsDarkMode = themeNotifier.isDarkMode;
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        final sheetColor = currentIsDarkMode ? const Color(0xFF121212) : theme.scaffoldBackgroundColor;
+        Future<Map<String, dynamic>?> loadWindow() async {
+          try {
+            final uri = Uri.parse('$apiBaseUrl/get_vote_window.php');
+            final res = await http.get(uri).timeout(const Duration(seconds: 10));
+            final json = ElecomVotingService.decodeJson(res.body);
+            if (json is Map && json['success'] == true) {
+              final w = json['window'];
+              if (w is Map) return w.cast<String, dynamic>();
+            }
+          } catch (_) {}
+          return null;
+        }
+
+        Future<List<Map<String, dynamic>>> loadUserNotifications() async {
+          final sid = UserSession.studentId ?? '';
+          if (sid.isEmpty) return const [];
+          try {
+            final uri = Uri.parse('$apiBaseUrl/user_notifications_get.php?student_id=${Uri.encodeComponent(sid)}&limit=50');
+            final res = await http.get(uri).timeout(const Duration(seconds: 10));
+            final json = ElecomVotingService.decodeJson(res.body);
+            if (json is Map && json['success'] == true && json['notifications'] is List) {
+              return List<Map<String, dynamic>>.from(json['notifications'] as List);
+            }
+          } catch (_) {}
+          return const [];
+        }
+
+        Future<(Map<String, dynamic>?, List<Map<String, dynamic>>)> loadBoth() async {
+          final w = await loadWindow();
+          final n = await loadUserNotifications();
+          return (w, n);
+        }
+
+        String fmt(String? iso) {
+          if (iso == null || iso.isEmpty) return '—';
+          try { return DateFormat('MMM d, yyyy • h:mm a').format(DateTime.parse(iso)); } catch (_) { return iso; }
+        }
+
+        bool isPast(String? iso) {
+          try { return iso != null && iso.isNotEmpty && DateTime.now().isAfter(DateTime.parse(iso)); } catch (_) { return false; }
+        }
+
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                child: Container(color: Colors.black.withOpacity(0.15)),
+              ),
+            ),
+            DraggableScrollableSheet(
+              expand: false,
+              initialChildSize: 0.6,
+              maxChildSize: 0.95,
+              minChildSize: 0.4,
+              builder: (_, controller) {
+                return Container(
+                  decoration: const BoxDecoration(
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Material(
+                    color: sheetColor,
+                    child: SafeArea(
+                      top: false,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+                        child: FutureBuilder<(Map<String, dynamic>?, List<Map<String, dynamic>>)>( // Changed here
+                          future: loadBoth(),
+                          builder: (context, snap) {
+                            final w = snap.data?.$1;
+                            final userNotifs = snap.data?.$2 ?? const <Map<String, dynamic>>[];
+                            final startAt = w?['start_at']?.toString();
+                            final endAt = w?['end_at']?.toString();
+                            final resultsAt = w?['results_at']?.toString();
+                            final has = w != null;
+                            final votingOpen = has && startAt != null && endAt != null
+                                ? (DateTime.now().isAfter(DateTime.parse(startAt)) && DateTime.now().isBefore(DateTime.parse(endAt)))
+                                : false;
+                            final resultsVisible = has && resultsAt != null
+                                ? DateTime.now().isAfter(DateTime.parse(resultsAt))
+                                : (has && endAt != null ? DateTime.now().isAfter(DateTime.parse(endAt)) : false);
+
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text('Notifications', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
+                                    const Spacer(),
+                                    IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.of(ctx).pop()),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                if (snap.connectionState != ConnectionState.done)
+                                  const Expanded(child: Center(child: CircularProgressIndicator()))
+                                else
+                                  Expanded(
+                                    child: ListView(
+                                      controller: controller,
+                                      children: [
+                                        if (userNotifs.isNotEmpty) ...[
+                                          Padding(
+                                            padding: const EdgeInsets.only(left: 12, top: 4, bottom: 6),
+                                            child: Text('Your Notifications', style: theme.textTheme.labelLarge),
+                                          ),
+                                          ...userNotifs.map((n) {
+                                            final t = (n['title'] ?? '').toString();
+                                            final b = (n['body'] ?? '').toString();
+                                            final ts = (n['created_at'] ?? '').toString();
+                                            return ListTile(
+                                              leading: const Icon(Icons.notifications_active_outlined),
+                                              title: Text(t.isEmpty ? 'Notification' : t),
+                                              subtitle: Text(b.isNotEmpty ? b : fmt(ts)),
+                                            );
+                                          }),
+                                          const Divider(),
+                                        ],
+                                        if (has) ...[
+                                          Padding(
+                                            padding: const EdgeInsets.only(left: 12, top: 4, bottom: 6),
+                                            child: Text('Election Schedule', style: theme.textTheme.labelLarge),
+                                          ),
+                                          ListTile(
+                                            leading: const Icon(Icons.event_available_outlined),
+                                            title: const Text('Election Start'),
+                                            subtitle: Text(fmt(startAt)),
+                                            trailing: votingOpen || isPast(startAt) ? const Icon(Icons.check_circle, color: Colors.green) : null,
+                                          ),
+                                          ListTile(
+                                            leading: const Icon(Icons.event_busy_outlined),
+                                            title: const Text('Election End'),
+                                            subtitle: Text(fmt(endAt)),
+                                            trailing: isPast(endAt) ? const Icon(Icons.check_circle, color: Colors.green) : null,
+                                          ),
+                                          ListTile(
+                                            leading: const Icon(Icons.emoji_events_outlined),
+                                            title: const Text('Results Publish'),
+                                            subtitle: Text(fmt(resultsAt)),
+                                            trailing: resultsVisible ? const Icon(Icons.visibility, color: Colors.deepPurple) : null,
+                                          ),
+                                        ]
+                                        else ...[
+                                          const ListTile(
+                                            leading: Icon(Icons.info_outline),
+                                            title: Text('No announcements yet'),
+                                            subtitle: Text('Election schedule will appear here once set.'),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
+                              ],
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        );
+      },
+    );
+    // Mark notifications as seen using latest server timestamp
+    if (_latestServerTs != null) {
+      _lastSeenTs = _latestServerTs;
+      _unreadCount.value = 0;
+    }
+    // Also mark user notifications as read on server
+    final sid = UserSession.studentId ?? '';
+    if (sid.isNotEmpty) {
+      try {
+        await http
+            .post(Uri.parse('$apiBaseUrl/user_notifications_mark_read.php'), body: {'student_id': sid})
+            .timeout(const Duration(seconds: 6));
+      } catch (_) {}
+    }
   }
 
   // Presents a dialog with a blurred background overlay.
@@ -333,6 +604,80 @@ class StudentBottomNavBar {
       ),
       barrierDismissible: true,
     );
+  }
+}
+
+// Background utility: fetch unread notifications count based on vote window updates
+Future<void> _refreshNotifications() async {
+  try {
+    // Load recent schedule windows
+    final resWin = await http
+        .get(Uri.parse('$apiBaseUrl/get_vote_windows.php?limit=10'))
+        .timeout(const Duration(seconds: 8));
+    final jsonWin = ElecomVotingService.decodeJson(resWin.body);
+    final List<Map<String, dynamic>> windows = (jsonWin is Map && jsonWin['success'] == true && jsonWin['windows'] is List)
+        ? List<Map<String, dynamic>>.from(jsonWin['windows'])
+        : <Map<String, dynamic>>[];
+    if (windows.isEmpty) {
+      // Fallback single-window
+      try {
+        final res2 = await http.get(Uri.parse('$apiBaseUrl/get_vote_window.php')).timeout(const Duration(seconds: 6));
+        final j2 = ElecomVotingService.decodeJson(res2.body);
+        if (j2 is Map && j2['success'] == true && j2['window'] is Map) {
+          windows.add(Map<String, dynamic>.from(j2['window'] as Map));
+        }
+      } catch (_) {}
+    }
+
+    // Load user notifications for this student
+    final sid = UserSession.studentId ?? '';
+    List<Map<String, dynamic>> userNotifs = const [];
+    if (sid.isNotEmpty) {
+      try {
+        final resUser = await http
+            .get(Uri.parse('$apiBaseUrl/user_notifications_get.php?student_id=${Uri.encodeComponent(sid)}&limit=50'))
+            .timeout(const Duration(seconds: 8));
+        final jn = ElecomVotingService.decodeJson(resUser.body);
+        if (jn is Map && jn['success'] == true && jn['notifications'] is List) {
+          userNotifs = List<Map<String, dynamic>>.from(jn['notifications'] as List);
+        }
+      } catch (_) {}
+    }
+
+    // Compute unread counts
+    String? latestTs;
+    int scheduleUnread = 0;
+    for (final w in windows) {
+      final ts = (w['updated_at']?.toString().isNotEmpty == true)
+          ? w['updated_at'].toString()
+          : (w['created_at']?.toString() ?? '');
+      if (ts.isEmpty) continue;
+      if (latestTs == null || ts.compareTo(latestTs) > 0) latestTs = ts;
+      final lastSeen = StudentBottomNavBar._lastSeenTs;
+      if (lastSeen != null && ts.compareTo(lastSeen) > 0) scheduleUnread++;
+    }
+
+    // Unread user notifications: read_at is null
+    int userUnread = 0;
+    for (final n in userNotifs) {
+      final readAt = (n['read_at'] ?? '').toString();
+      if (readAt.isEmpty) userUnread++;
+      final ts = (n['created_at'] ?? '').toString();
+      if (ts.isNotEmpty) {
+        if (latestTs == null || ts.compareTo(latestTs) > 0) latestTs = ts;
+      }
+    }
+
+    if (latestTs != null) StudentBottomNavBar._latestServerTs = latestTs;
+
+    // If first time, show total available; otherwise show only new since lastSeen for schedule + unread for user notifs
+    if (StudentBottomNavBar._lastSeenTs == null) {
+      StudentBottomNavBar._unreadCount.value = windows.length + userUnread;
+    } else {
+      StudentBottomNavBar._unreadCount.value = scheduleUnread + userUnread;
+    }
+  } catch (_) {
+    // ignore network errors
   }
 }
 
@@ -1152,6 +1497,9 @@ class _PieChartPainter extends CustomPainter {
       );
       return;
     }
+    // Enforce voting window
+    final allowed = await _ensureVotingWindowOpen(context);
+    if (!allowed) return;
     // Prevent navigating if already voted (server-side check)
     final already = await ElecomVotingService.checkAlreadyVotedDirect(sid);
     if (already) {
@@ -1163,6 +1511,43 @@ class _PieChartPainter extends CustomPainter {
     await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const VotingScreen()),
     );
+  }
+
+  // Validates the current voting window against backend schedule
+  Future<bool> _ensureVotingWindowOpen(BuildContext context) async {
+    try {
+      final res = await http
+          .get(Uri.parse('$apiBaseUrl/get_vote_window.php'))
+          .timeout(const Duration(seconds: 10));
+      final json = ElecomVotingService.decodeJson(res.body);
+      if (json is Map && json['success'] == true && json['window'] is Map) {
+        final w = Map<String, dynamic>.from(json['window'] as Map);
+        DateTime? s;
+        DateTime? e;
+        try {
+          final v = (w['start_at'] ?? '').toString();
+          if (v.isNotEmpty) s = DateTime.parse(v);
+        } catch (_) {}
+        try {
+          final v = (w['end_at'] ?? '').toString();
+          if (v.isNotEmpty) e = DateTime.parse(v);
+        } catch (_) {}
+        final now = DateTime.now();
+        if (s != null && now.isBefore(s)) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Voting has not started yet.')),
+          );
+          return false;
+        }
+        if (e != null && now.isAfter(e)) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Voting has ended.')),
+          );
+          return false;
+        }
+      }
+    } catch (_) {}
+    return true;
   }
 
   // ===== Helpers for modal flows =====
@@ -1755,6 +2140,13 @@ class _DirectVoteContentState extends State<_DirectVoteContent> {
                 }
               }
               if (ok && mounted) {
+                // Notify the user (fire-and-forget)
+                ElecomVotingService.addUserNotification(
+                  sid,
+                  title: 'Vote submitted',
+                  body: 'Your vote has been recorded.',
+                  type: 'success',
+                );
                 Navigator.of(context).pop();
                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vote submitted successfully.')));
               } else if (mounted) {

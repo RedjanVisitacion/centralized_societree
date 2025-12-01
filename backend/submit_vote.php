@@ -154,6 +154,25 @@ try {
     $insr2->close();
   }
 
+  // Server-side user notification: inform the student their vote was recorded
+  @ $mysqli->query("CREATE TABLE IF NOT EXISTS user_notifications (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    student_id VARCHAR(64) NOT NULL,
+    type VARCHAR(32) NOT NULL DEFAULT 'info',
+    title VARCHAR(255) NOT NULL,
+    body TEXT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    read_at TIMESTAMP NULL DEFAULT NULL,
+    PRIMARY KEY (id),
+    KEY idx_student_created (student_id, created_at)
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+  if ($n = $mysqli->prepare('INSERT INTO user_notifications (student_id, type, title, body) VALUES (?, "success", "Vote submitted", ?)')) {
+    $nb = 'Your vote has been recorded. Receipt: ' . $receipt_id;
+    $n->bind_param('ss', $student_id, $nb);
+    @$n->execute();
+    $n->close();
+  }
+
   $mysqli->commit();
   respond(true, 'Vote saved', ['vote_id' => $vote_id, 'receipt_id' => $receipt_id]);
 } catch (Exception $e) {

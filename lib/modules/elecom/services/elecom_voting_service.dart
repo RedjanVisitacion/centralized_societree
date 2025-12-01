@@ -296,4 +296,27 @@ class ElecomVotingService {
     }
     return const [];
   }
+
+  // Fire-and-forget: create a user-level notification (e.g., after vote submission)
+  static Future<void> addUserNotification(
+    String studentId, {
+    required String title,
+    String body = '',
+    String type = 'info',
+  }) async {
+    if (studentId.isEmpty || title.isEmpty) return;
+    try {
+      final uri = Uri.parse('$apiBaseUrl/user_notifications_add.php');
+      await http
+          .post(uri, body: {
+            'student_id': studentId,
+            'title': title,
+            'body': body,
+            'type': type,
+          })
+          .timeout(const Duration(seconds: 8));
+    } catch (_) {
+      // best-effort only; ignore errors
+    }
+  }
 }
