@@ -33,10 +33,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
   exit();
 }
 
-$DB_HOST = '103.252.118.161';
-$DB_USER = 'root';
-$DB_PASS = 'ustpServer123!';
-$DB_NAME = 'societree_app';
+$DB_HOST = 'localhost';
+$DB_USER = 'societree';
+$DB_PASS = 'socieTree12345';
+$DB_NAME = 'societree';
 $DB_PORT = 3306;
 
 // Bump this when schema-migration logic changes, so we can verify deployment

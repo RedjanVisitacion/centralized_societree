@@ -103,6 +103,7 @@ class _StudentDashboardState extends State<StudentDashboard> {
   bool _voted = false;
   DateTime? _electionStart;
   DateTime? _electionEnd;
+  bool _canVote = false;
   Timer? _ticker;
   Duration _remaining = Duration.zero;
   List<Map<String, dynamic>> _parties = const [];
@@ -188,11 +189,17 @@ class _StudentDashboardState extends State<StudentDashboard> {
   }
 
   bool _computeCanVote() {
-    final now = DateTime.now();
-    final s = _electionStart;
-    final e = _electionEnd;
-    if (s == null || e == null) return true; // if not configured, allow
-    return now.isAfter(s) && now.isBefore(e);
+    // Trust backend flag when available, else compute with strict default closed
+    if (_canVote) {
+      // Double-check against times if present to avoid edge cases
+      final s = _electionStart; final e = _electionEnd; final now = DateTime.now();
+      if (s != null && e != null) return now.isAfter(s) && now.isBefore(e);
+      return true;
+    }
+    // If flag is false, do not allow even if times missing
+    final s = _electionStart; final e = _electionEnd; final now = DateTime.now();
+    if (s != null && e != null) return now.isAfter(s) && now.isBefore(e);
+    return false;
   }
 
   bool _computeNotStarted() {
@@ -244,9 +251,26 @@ class _StudentDashboardState extends State<StudentDashboard> {
           DateTime? end;
           try { if (s != null && s.isNotEmpty) start = DateTime.parse(s); } catch (_) {}
           try { if (e != null && e.isNotEmpty) end = DateTime.parse(e); } catch (_) {}
+          // Determine open flag: prefer explicit field if provided, else compute
+          bool openFlag = false;
+          final rawOpen = (decoded['voting_open'] ?? w['voting_open']);
+          if (rawOpen is bool) {
+            openFlag = rawOpen;
+          } else if (rawOpen is num) {
+            openFlag = rawOpen != 0;
+          } else if (rawOpen is String) {
+            openFlag = rawOpen == '1' || rawOpen.toLowerCase() == 'true';
+          } else if (start != null && end != null) {
+            final now = DateTime.now();
+            openFlag = now.isAfter(start) && now.isBefore(end);
+          } else {
+            // If schedule missing, default to closed to avoid enabling voting past end
+            openFlag = false;
+          }
           setState(() {
             _electionStart = start;
             _electionEnd = end;
+            _canVote = openFlag;
           });
         }
       }
