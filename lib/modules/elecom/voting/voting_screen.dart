@@ -92,16 +92,19 @@ class _VotingScreenState extends State<VotingScreen> {
 
   String _normPos(String s) {
     final t = s.toLowerCase().trim();
-    if (t.contains('pres') && !t.contains('vice')) return 'President';
-    if (t.contains('vice') && t.contains('pres')) return 'Vice President';
+    // Detect representative roles first to avoid matching the 'pres' substring inside 'representative'
+    if (t.contains('it') && t.contains('rep')) return 'IT Representative';
+    if (t.contains('btled') && t.contains('rep')) return 'BTLED Representative';
+    if (t.contains('bfpt') && t.contains('rep')) return 'BFPT Representative';
+    if (t.contains('representative') || (t.contains('rep') && !t.contains('president'))) return 'Representative';
+    // Now detect president/vice president with stricter conditions
+    if ((t.contains('president') || (t.startsWith('pres') && t.contains('ident'))) && !t.contains('vice')) return 'President';
+    if (t.contains('vice') && (t.contains('president') || t.contains('pres'))) return 'Vice President';
     if (t.contains('general') && t.contains('secret')) return 'General Secretary';
     if (t.contains('associate') && t.contains('secret')) return 'Associate Secretary';
     if (t.contains('treas')) return 'Treasurer';
     if (t.contains('audit')) return 'Auditor';
     if (t.contains('pio') || t.contains('public')) return 'P.I.O';
-    if (t.contains('it') && t.contains('rep')) return 'IT Representative';
-    if (t.contains('btled') && t.contains('rep')) return 'BTLED Representative';
-    if (t.contains('bfpt') && t.contains('rep')) return 'BFPT Representative';
     // Fallback to capitalized original
     if (s.isEmpty) return s;
     return s[0].toUpperCase() + s.substring(1);
