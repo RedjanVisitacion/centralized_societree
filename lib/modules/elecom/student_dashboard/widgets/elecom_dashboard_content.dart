@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:centralized_societree/modules/elecom/student_dashboard/widgets/elecom_button.dart';
+import 'package:centralized_societree/modules/elecom/voting/voting_screen.dart';
 import '../../omnibus_slideshow.dart';
 import '../../parties_candidates_grid.dart';
 import '../../things_to_know.dart';
@@ -240,7 +241,13 @@ class ElecomDashboardContent extends StatelessWidget {
                           alignment: Alignment.center,
                           child: ElecomButton.primary(
                             label: canVote ? 'Vote Now' : (notStarted ? 'Not Started' : 'Voting Closed'),
-                            onPressed: canVote ? () async { await openVoteFlow(context); } : null,
+                            onPressed: canVote
+                                ? () async {
+                                    await Navigator.of(context).push(
+                                      MaterialPageRoute(builder: (_) => const VotingScreen()),
+                                    );
+                                  }
+                                : null,
                           ),
                         ),
                       ],
