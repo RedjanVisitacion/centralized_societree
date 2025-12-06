@@ -7,11 +7,14 @@ import 'package:centralized_societree/services/user_session.dart';
 import '../services/student_dashboard_service.dart';
 import 'package:centralized_societree/modules/elecom/voting/voting_screen.dart';
 import 'package:centralized_societree/modules/elecom/voting/voting_receipt_screen.dart';
+import 'package:centralized_societree/modules/elecom/voting/receipt_landing_screen.dart';
 import 'package:centralized_societree/modules/elecom/widgets/voting_action_button.dart';
 import 'dart:math' as math;
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:centralized_societree/config/api_config.dart';
+import 'package:get/get.dart';
+import 'package:centralized_societree/modules/elecom/student_dashboard/controllers/elecom_nav_controller.dart';
 
 class StudentBottomNavBar {
   // Session-scoped notification state
@@ -22,6 +25,8 @@ class StudentBottomNavBar {
   // Results visibility for dynamic bottom bar labeling
   static final ValueNotifier<bool> _resultsVisible = ValueNotifier<bool>(false);
   static Timer? _windowTimer;
+  // Public: ping listeners when Home is tapped to trigger a refresh in dashboard parts that subscribe
+  static final ValueNotifier<int> homeRefreshTick = ValueNotifier<int>(0);
 
   static Widget? build({
     required BuildContext context,
@@ -45,6 +50,12 @@ class StudentBottomNavBar {
       _refreshResultsVisibility();
     });
 
+    final ctrl = Get.put(ElecomNavController());
+    ctrl.bindTo(_resultsVisible, _unreadCount);
+    // We're on the Elecom dashboard; default highlight should be Home
+    if (ctrl.currentIndex.value != 0) {
+      ctrl.currentIndex.value = 0;
+    }
     Widget wrappedNavBar = ListenableBuilder(
       listenable: themeNotifier,
       builder: (context, child) {
@@ -72,16 +83,14 @@ class StudentBottomNavBar {
                           ? Colors.grey[800]
                           : Colors.grey[300],
                     ),
-                    ValueListenableBuilder<bool>(
-                      valueListenable: _resultsVisible,
-                      builder: (context, resVisible, _) {
-                        return BottomNavigationBar(
+                    Obx(() {
+                      final resVisible = ctrl.resultsVisible.value;
+                      final isDarkBar = currentIsDarkMode;
+                      return BottomNavigationBar(
                           backgroundColor: currentIsDarkMode
                               ? const Color(0xFF121212)
                               : theme.scaffoldBackgroundColor,
-                          selectedItemColor: currentIsDarkMode
-                              ? Colors.white
-                              : theme.colorScheme.primary,
+                          selectedItemColor: isDarkBar ? Colors.white : Colors.black,
                           unselectedItemColor: currentIsDarkMode
                               ? Colors.white70
                               : Colors.grey[600],
@@ -91,11 +100,21 @@ class StudentBottomNavBar {
                       unselectedLabelStyle: TextStyle(
                         color: currentIsDarkMode ? Colors.white70 : null,
                       ),
+                      showUnselectedLabels: true,
                       elevation: 0,
-                      currentIndex: 0,
+                      currentIndex: ctrl.currentIndex.value,
                       onTap: (i) {
+                        ctrl.currentIndex.value = i;
+                        if (i == 0) {
+                          // Notify observers to refresh; cheap and instant.
+                          homeRefreshTick.value = homeRefreshTick.value + 1;
+                          return;
+                        }
                         if (i == 1) {
-                          openVoteFlow(context);
+                          // Navigate to voting immediately without pre-checks to avoid any loading delay
+                          Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const VotingScreen()),
+                          );
                           return;
                         }
 
@@ -109,7 +128,10 @@ class StudentBottomNavBar {
                           return;
                         }
                         if (i == 3) {
-                          _openReceipt(context);
+                          // Navigate instantly to a lightweight landing; it handles showing cached receipt or no-receipt message without loading
+                          Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const ReceiptLandingScreen()),
+                          );
                           return;
                         }
                         if (i == 4) {
@@ -140,8 +162,8 @@ class StudentBottomNavBar {
                             color: currentIsDarkMode ? Colors.white70 : null,
                           ),
                           activeIcon: Icon(
-                            Icons.home_outlined,
-                            color: currentIsDarkMode ? Colors.white : null,
+                            Icons.home,
+                            color: currentIsDarkMode ? Colors.white : Colors.black,
                           ),
                           label: 'Home',
                         ),
@@ -151,8 +173,8 @@ class StudentBottomNavBar {
                             color: currentIsDarkMode ? Colors.white70 : null,
                           ),
                           activeIcon: Icon(
-                            Icons.how_to_vote_outlined,
-                            color: currentIsDarkMode ? Colors.white : null,
+                            Icons.how_to_vote,
+                            color: currentIsDarkMode ? Colors.white : Colors.black,
                           ),
                           label: 'Election',
                         ),
@@ -162,8 +184,8 @@ class StudentBottomNavBar {
                             color: currentIsDarkMode ? Colors.white70 : null,
                           ),
                           activeIcon: Icon(
-                            resVisible ? Icons.emoji_events_outlined : Icons.analytics_outlined,
-                            color: currentIsDarkMode ? Colors.white : null,
+                            resVisible ? Icons.emoji_events : Icons.analytics,
+                            color: currentIsDarkMode ? Colors.white : Colors.black,
                           ),
                           label: resVisible ? 'Winners' : 'Results',
                         ),
@@ -173,76 +195,71 @@ class StudentBottomNavBar {
                             color: currentIsDarkMode ? Colors.white70 : null,
                           ),
                           activeIcon: Icon(
-                            Icons.receipt_long_outlined,
-                            color: currentIsDarkMode ? Colors.white : null,
+                            Icons.receipt_long,
+                            color: currentIsDarkMode ? Colors.white : Colors.black,
                           ),
                           label: 'Receipt',
                         ),
                         BottomNavigationBarItem(
-                          icon: ValueListenableBuilder<int>(
-                            valueListenable: _unreadCount,
-                            builder: (_, count, __) {
-                              final base = Icon(
-                                Icons.notifications_outlined,
-                                color: currentIsDarkMode ? Colors.white70 : null,
-                              );
-                              if (count <= 0) return base;
-                              final text = count > 9 ? '9+' : count.toString();
-                              return Stack(
-                                clipBehavior: Clip.none,
-                                children: [
-                                  base,
-                                  Positioned(
-                                    right: -4,
-                                    top: -4,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-                                      decoration: const BoxDecoration(color: Colors.red, borderRadius: BorderRadius.all(Radius.circular(9))),
-                                      constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
-                                      child: Center(
-                                        child: Text(text, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
-                                      ),
+                          icon: Obx(() {
+                            final count = ctrl.unreadCount.value;
+                            final base = Icon(
+                              Icons.notifications_outlined,
+                              color: currentIsDarkMode ? Colors.white70 : null,
+                            );
+                            if (count <= 0) return base;
+                            final text = count > 9 ? '9+' : count.toString();
+                            return Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                base,
+                                Positioned(
+                                  right: -4,
+                                  top: -4,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                    decoration: const BoxDecoration(color: Colors.red, borderRadius: BorderRadius.all(Radius.circular(9))),
+                                    constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                                    child: Center(
+                                      child: Text(text, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w700)),
                                     ),
                                   ),
-                                ],
-                              );
-                            },
-                          ),
-                          activeIcon: ValueListenableBuilder<int>(
-                            valueListenable: _unreadCount,
-                            builder: (_, count, __) {
-                              final base = Icon(
-                                Icons.notifications_outlined,
-                                color: currentIsDarkMode ? Colors.white : null,
-                              );
-                              if (count <= 0) return base;
-                              final text = count > 9 ? '9+' : count.toString();
-                              return Stack(
-                                clipBehavior: Clip.none,
-                                children: [
-                                  base,
-                                  Positioned(
-                                    right: -6,
-                                    top: -6,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                                      decoration: const BoxDecoration(color: Colors.red, borderRadius: BorderRadius.all(Radius.circular(9))),
-                                      constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-                                      child: Center(
-                                        child: Text(text, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700)),
-                                      ),
+                                ),
+                              ],
+                            );
+                          }),
+                          activeIcon: Obx(() {
+                            final count = ctrl.unreadCount.value;
+                            final base = Icon(
+                              Icons.notifications,
+                              color: currentIsDarkMode ? Colors.white : Colors.black,
+                            );
+                            if (count <= 0) return base;
+                            final text = count > 9 ? '9+' : count.toString();
+                            return Stack(
+                              clipBehavior: Clip.none,
+                              children: [
+                                base,
+                                Positioned(
+                                  right: -6,
+                                  top: -6,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                    decoration: const BoxDecoration(color: Colors.red, borderRadius: BorderRadius.all(Radius.circular(9))),
+                                    constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                                    child: Center(
+                                      child: Text(text, style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.w700)),
                                     ),
                                   ),
-                                ],
-                              );
-                            },
-                          ),
+                                ),
+                              ],
+                            );
+                          }),
                           label: 'Notifications',
                         ),
                       ],
-                        );
-                      },
-                    ),
+                      );
+                    }),
                   ],
                 ),
               ),

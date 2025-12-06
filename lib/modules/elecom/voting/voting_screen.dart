@@ -708,14 +708,6 @@ class _VotingScreenState extends State<VotingScreen> {
                                                         ),
                                                       ),
                                                     ),
-                                                    if ((selected ?? '').isNotEmpty)
-                                                      TextButton.icon(
-                                                        onPressed: () => setState(() {
-                                                          _selections.remove(posKey);
-                                                        }),
-                                                        icon: const Icon(Icons.clear, size: 18),
-                                                        label: const Text('Clear'),
-                                                      ),
                                                   ],
                                                 ),
                                                 const SizedBox(height: 8),
@@ -728,20 +720,26 @@ class _VotingScreenState extends State<VotingScreen> {
                                                       child: SizedBox(
                                                         width: 40,
                                                         height: 40,
-                                                        child: FutureBuilder<String?>(
-                                                          future: _resolvePhoto((c['name'] ?? '').toString(), (c['photoUrl'] ?? '').toString()),
-                                                          builder: (context, snap) {
-                                                            final url = snap.data;
-                                                            if (url != null && url.isNotEmpty) {
-                                                              return Image.network(
-                                                                url,
-                                                                fit: BoxFit.cover,
-                                                                errorBuilder: (_, __, ___) => Container(color: Colors.grey.shade200, child: const Icon(Icons.person, size: 24, color: Colors.grey)),
-                                                              );
-                                                            }
-                                                            return Container(color: isDark ? Colors.grey[800] : const Color(0xFFEAEAEA), child: const Icon(Icons.person, size: 24, color: Colors.grey));
-                                                          },
-                                                        ),
+                                                        child: () {
+                                                          final raw = (c['photoUrl'] ?? '').toString();
+                                                          if (raw.isNotEmpty) {
+                                                            return Image.network(
+                                                              key: ValueKey(raw),
+                                                              raw,
+                                                              fit: BoxFit.cover,
+                                                              gaplessPlayback: true,
+                                                              errorBuilder: (_, __, ___) => Container(
+                                                                color: Colors.grey.shade200,
+                                                                child: const Icon(Icons.person, size: 24, color: Colors.grey),
+                                                              ),
+                                                            );
+                                                          }
+                                                          return Container(
+                                                            key: const ValueKey('no-photo'),
+                                                            color: isDark ? Colors.grey[800] : const Color(0xFFEAEAEA),
+                                                            child: const Icon(Icons.person, size: 24, color: Colors.grey),
+                                                          );
+                                                        }(),
                                                       ),
                                                     ),
                                                     title: Text(
