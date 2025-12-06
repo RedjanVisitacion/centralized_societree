@@ -1328,10 +1328,15 @@ class _ResultsChartsSheetState extends State<_ResultsChartsSheet> {
       if (u == 'PIO' || u == 'P.I.O' || u.contains('PUBLIC INFORMATION')) {
         return 'Public Information Officer';
       }
+      // Representatives FIRST to avoid matching 'PRES' inside 'REPRESENTATIVE'
+      if (u.contains('REP') && u.contains('IT')) return 'IT Representative';
+      if (u.contains('REP') && u.contains('BTLED')) return 'BTLED Representative';
+      if (u.contains('REP') && u.contains('BFPT')) return 'BFPT Representative';
       if (u.contains('VICE') && u.contains('PRES')) return 'Vice President';
       if (u.contains('GENERAL') && u.contains('SEC')) return 'General Secretary';
       if (u.contains('ASSOC') && u.contains('SEC')) return 'Associate Secretary';
-      if (u.contains('PRES')) return 'President';
+      // Stricter president check
+      if (u.contains('PRESIDENT')) return 'President';
       if (u.contains('TREAS')) return 'Treasurer';
       if (u.contains('AUDIT')) return 'Auditor';
       return s.isEmpty ? '—' : s;
@@ -1643,15 +1648,17 @@ class _VotesByPositionChart extends StatelessWidget {
     String posKey(String s) {
       final u = s.toUpperCase().trim();
       if (u == 'PIO' || u == 'P.I.O' || u.contains('PUBLIC INFORMATION')) return 'Public Information Officer';
-      if (u.contains('VICE') && u.contains('PRES')) return 'Vice President';
-      if (u.contains('GENERAL') && u.contains('SEC')) return 'General Secretary';
-      if (u.contains('ASSOC') && u.contains('SEC')) return 'Associate Secretary';
-      if (u.contains('PRES')) return 'President';
-      if (u.contains('TREAS')) return 'Treasurer';
-      if (u.contains('AUDIT')) return 'Auditor';
+      // Representatives FIRST to avoid matching 'PRES' inside 'REPRESENTATIVE'
       if (u.contains('REP') && u.contains('IT')) return 'IT Representative';
       if (u.contains('REP') && u.contains('BTLED')) return 'BTLED Representative';
       if (u.contains('REP') && u.contains('BFPT')) return 'BFPT Representative';
+      if (u.contains('VICE') && u.contains('PRES')) return 'Vice President';
+      if (u.contains('GENERAL') && u.contains('SEC')) return 'General Secretary';
+      if (u.contains('ASSOC') && u.contains('SEC')) return 'Associate Secretary';
+      // Stricter president check
+      if (u.contains('PRESIDENT')) return 'President';
+      if (u.contains('TREAS')) return 'Treasurer';
+      if (u.contains('AUDIT')) return 'Auditor';
       return s.isEmpty ? '—' : s;
     }
 
