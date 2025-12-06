@@ -710,12 +710,18 @@ class StudentBottomNavBar {
                                                   ],
                                                 ),
                                                 onTap: () async {
-                                                  if (isResults) {
-                                                    if (Navigator.of(ctx).canPop()) Navigator.of(ctx).pop();
-                                                    await Future.delayed(const Duration(milliseconds: 100));
-                                                    if (context.mounted) {
-                                                      _openWinnersSheet(context);
-                                                    }
+                                                  if (!isResults) return;
+                                                  final canOpen = resultsVisible || StudentBottomNavBar.windowEnded;
+                                                  if (!canOpen) {
+                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                      const SnackBar(content: Text('Results will be available after voting ends.')),
+                                                    );
+                                                    return;
+                                                  }
+                                                  if (Navigator.of(ctx).canPop()) Navigator.of(ctx).pop();
+                                                  await Future.delayed(const Duration(milliseconds: 100));
+                                                  if (context.mounted) {
+                                                    _openWinnersSheet(context);
                                                   }
                                                 },
                                                 trailing: PopupMenuButton<String>(

@@ -19,17 +19,34 @@ class VotingActionButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final btn = FilledButton.icon(
-      onPressed: onPressed,
-      style: FilledButton.styleFrom(
-        backgroundColor: isDark ? Colors.white : Colors.black,
-        foregroundColor: isDark ? Colors.black : Colors.white,
-        minimumSize: compact ? const Size(0, 40) : null,
-        padding: compact ? const EdgeInsets.symmetric(horizontal: 16) : null,
+    final style = FilledButton.styleFrom(
+      backgroundColor: isDark ? Colors.white : Colors.black,
+      // Foreground controls icon + text default; we'll also enforce text color via Text widget style for clarity
+      foregroundColor: isDark ? Colors.black : Colors.white,
+      minimumSize: compact ? const Size(0, 40) : null,
+      padding: compact ? const EdgeInsets.symmetric(horizontal: 16) : null,
+      textStyle: TextStyle(
+        color: isDark ? Colors.black87 : Colors.white,
+        fontWeight: FontWeight.w600,
       ),
-      icon: icon ?? const SizedBox.shrink(),
-      label: Text(label),
     );
+
+    Widget btn;
+    if (icon == null) {
+      // Use plain FilledButton to keep the label perfectly centered
+      btn = FilledButton(
+        onPressed: onPressed,
+        style: style,
+        child: Text(label, style: TextStyle(color: isDark ? Colors.black87 : Colors.white)),
+      );
+    } else {
+      btn = FilledButton.icon(
+        onPressed: onPressed,
+        style: style,
+        icon: icon!,
+        label: Text(label, style: TextStyle(color: isDark ? Colors.black87 : Colors.white)),
+      );
+    }
     if (fullWidth && !compact) {
       return SizedBox(width: double.infinity, child: btn);
     }

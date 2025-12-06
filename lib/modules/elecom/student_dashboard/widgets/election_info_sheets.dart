@@ -98,7 +98,7 @@ void openFaqsEducation(BuildContext context) {
                     ListTile(
                       title: Text('Who can vote?'),
                       subtitle: Text(
-                        'All currently enrolled students with valid IDs.',
+                        'All currently enrolled students in USTP Oroquieta Campus',
                       ),
                     ),
                     ListTile(
@@ -156,7 +156,7 @@ void openFindPollingStation(BuildContext context) {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Campus polling stations',
+                'USTP Oroquieta polling stations (TBA)',
                 style: theme.textTheme.titleLarge?.copyWith(
                   fontWeight: FontWeight.w700,
                 ),
@@ -167,26 +167,19 @@ void openFindPollingStation(BuildContext context) {
                   controller: controller,
                   children: const [
                     ListTile(
-                      leading: Icon(Icons.location_on_outlined),
-                      title: Text('Main Hall – Booth A'),
-                      subtitle: Text('Open 8:00 AM – 5:00 PM'),
+                      leading: Icon(Icons.campaign_outlined),
+                      title: Text('Exact schedule to be announced'),
+                      subtitle: Text('ELECOM will publish official polling locations and hours soon.'),
                     ),
                     ListTile(
-                      leading: Icon(Icons.location_on_outlined),
-                      title: Text('Library Lobby – Booth B'),
-                      subtitle: Text('Open 8:00 AM – 5:00 PM'),
-                    ),
-                    ListTile(
-                      leading: Icon(Icons.location_on_outlined),
-                      title: Text('Engineering Building – Booth C'),
-                      subtitle: Text('Open 8:00 AM – 5:00 PM'),
+                      leading: Icon(Icons.info_outline),
+                      title: Text('Stay tuned in-app'),
+                      subtitle: Text('Watch for a notification from ELECOM with final details.'),
                     ),
                     ListTile(
                       leading: Icon(Icons.support_agent_outlined),
-                      title: Text('ELECOM Help Desk'),
-                      subtitle: Text(
-                        'For assistance and verification concerns',
-                      ),
+                      title: Text('ELECOM Help Desk (Oroquieta Campus)'),
+                      subtitle: Text('For assistance and verification concerns'),
                     ),
                   ],
                 ),

@@ -209,7 +209,12 @@ class _VotingScreenState extends State<VotingScreen> {
                         mainAxisSize: MainAxisSize.min,
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Please review your selections:'),
+                          Text(
+                            'Please review your selections:',
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  color: shouldUseDark ? Colors.white70 : null,
+                                ),
+                          ),
                           const SizedBox(height: 8),
                           ConstrainedBox(
                             constraints: const BoxConstraints(maxHeight: 420),
@@ -267,11 +272,43 @@ class _VotingScreenState extends State<VotingScreen> {
                                     final org = (cand['organization'] ?? '').toString();
                                     final parts = posKey.split('::');
                                     final prettyPos = parts.length == 2 ? '${parts[0]} — ${parts[1]}' : posKey;
+                                    final isDark = shouldUseDark;
                                     return ListTile(
                                       dense: true,
                                       contentPadding: EdgeInsets.zero,
-                                      title: Text(prettyPos, style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600)),
-                                      subtitle: Text([name, if (org.isNotEmpty) '($org)'].join(' ')),
+                                      title: Text(
+                                        prettyPos,
+                                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                              fontWeight: FontWeight.w700,
+                                              color: isDark ? Colors.white : null,
+                                              fontSize: 16,
+                                            ),
+                                      ),
+                                      subtitle: RichText(
+                                        text: TextSpan(
+                                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                                color: isDark ? Colors.white70 : Colors.black87,
+                                              ),
+                                          children: [
+                                            TextSpan(
+                                              text: name,
+                                              style: TextStyle(
+                                                color: isDark ? Colors.white : Colors.black,
+                                                fontWeight: FontWeight.w700,
+                                                fontSize: 15,
+                                              ),
+                                            ),
+                                            if (org.isNotEmpty)
+                                              TextSpan(
+                                                text: ' ($org)',
+                                                style: TextStyle(
+                                                  color: isDark ? Colors.white70 : Colors.black54,
+                                                  fontWeight: FontWeight.w400,
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                      ),
                                     );
                                   },
                                 );
@@ -284,9 +321,12 @@ class _VotingScreenState extends State<VotingScreen> {
                     actions: [
                       TextButton(
                         onPressed: () => Navigator.of(ctx).pop(false),
-                        child: const Text('Cancel'),
                         style: TextButton.styleFrom(
-                          foregroundColor: (Theme.of(ctx).brightness == Brightness.dark) ? Colors.white : Colors.black,
+                          foregroundColor: shouldUseDark ? Colors.white : Colors.black,
+                        ),
+                        child: Text(
+                          'Cancel',
+                          style: TextStyle(color: shouldUseDark ? Colors.white : Colors.black),
                         ),
                       ),
                       VotingActionButton(
