@@ -29,6 +29,9 @@ class StudentBottomNavBar {
   static final ValueNotifier<bool> _windowEnded = ValueNotifier<bool>(false);
   // Window-not-started flag for instant gating
   static final ValueNotifier<bool> _windowNotStarted = ValueNotifier<bool>(false);
+  // Public read-only accessors (instant checks for other screens)
+  static bool get windowEnded => _windowEnded.value;
+  static bool get windowNotStarted => _windowNotStarted.value;
   // Public: ping listeners when Home is tapped to trigger a refresh in dashboard parts that subscribe
   static final ValueNotifier<int> homeRefreshTick = ValueNotifier<int>(0);
 
