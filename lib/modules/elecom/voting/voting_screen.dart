@@ -375,71 +375,98 @@ class _VotingScreenState extends State<VotingScreen> {
               ),
               Center(
                 child: Dialog(
-                  insetPadding: const EdgeInsets.symmetric(horizontal: 60),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          theme.colorScheme.surface,
-                          theme.colorScheme.surface.withOpacity(0.95),
+                  insetPadding: const EdgeInsets.symmetric(horizontal: 48),
+                  elevation: 0,
+                  backgroundColor: Colors.transparent,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.surface.withOpacity(0.92),
+                        borderRadius: BorderRadius.circular(20),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.12),
+                            blurRadius: 24,
+                            offset: const Offset(0, 12),
+                          ),
                         ],
                       ),
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(minWidth: 280, maxWidth: 420),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(
-                            width: 56,
-                            height: 56,
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.primary.withOpacity(0.12),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Center(
-                              child: Icon(Icons.how_to_vote, color: theme.colorScheme.primary, size: 28),
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          Text(
-                            'Submitting your vote...',
-                            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Please wait a moment while we securely record your choices.',
-                            textAlign: TextAlign.center,
-                            style: theme.textTheme.bodySmall?.copyWith(color: theme.textTheme.bodySmall?.color?.withOpacity(0.8)),
-                          ),
-                          const SizedBox(height: 16),
-                          SizedBox(
-                            width: 40,
-                            height: 40,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 4,
-                              valueColor: AlwaysStoppedAnimation<Color>(theme.colorScheme.primary),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: LinearProgressIndicator(
-                                minHeight: 6,
-                                color: theme.colorScheme.primary,
-                                backgroundColor: theme.colorScheme.primary.withOpacity(0.15),
-                              ),
-                            ),
-                          ),
-                        ],
+                      padding: const EdgeInsets.fromLTRB(22, 20, 22, 20),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(minWidth: 300, maxWidth: 440),
+                        child: StatefulBuilder(
+                          builder: (ctx2, setInner) {
+                            var up = true;
+                            return Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                TweenAnimationBuilder<double>(
+                                  tween: Tween(begin: up ? 0.96 : 1.0, end: up ? 1.0 : 0.96),
+                                  duration: const Duration(milliseconds: 900),
+                                  curve: Curves.easeInOut,
+                                  onEnd: () => setInner(() => up = !up),
+                                  builder: (c, scale, child) => Transform.scale(scale: scale, child: child),
+                                  child: Stack(
+                                    alignment: Alignment.center,
+                                    children: [
+                                      Container(
+                                        width: 72,
+                                        height: 72,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          gradient: RadialGradient(
+                                            colors: [
+                                              Colors.black.withOpacity(0.18),
+                                              Colors.black.withOpacity(0.08),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                      Container(
+                                        width: 56,
+                                        height: 56,
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withOpacity(0.12),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: Icon(Icons.how_to_vote, color: Colors.black, size: 28),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'Submitting your vote...',
+                                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                                  textAlign: TextAlign.center,
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Please wait a moment while we securely record your choices.',
+                                  textAlign: TextAlign.center,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.brightness == Brightness.dark
+                                        ? Colors.white70
+                                        : theme.textTheme.bodySmall?.color?.withOpacity(0.8),
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(10),
+                                    child: LinearProgressIndicator(
+                                      minHeight: 8,
+                                      color: Colors.black,
+                                      backgroundColor: Colors.black.withOpacity(0.16),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        ),
                       ),
                     ),
                   ),
