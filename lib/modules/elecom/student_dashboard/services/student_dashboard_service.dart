@@ -121,13 +121,7 @@ class StudentDashboardService {
   }
 
   static String? _mkPhoto(Map<String, dynamic> e, String baseUrl) {
-    final direct =
-        (e['photo'] ??
-        e['image'] ??
-        e['profile'] ??
-        e['avatar'] ??
-        e['img_url'] ??
-        e['url']);
+    final direct = (e['photo'] ?? e['image'] ?? e['profile'] ?? e['avatar'] ?? e['img_url'] ?? e['url']);
     final name = _mkName(e);
     if (direct is String && direct.isNotEmpty) {
       if (direct.startsWith('http')) return direct;
@@ -137,13 +131,14 @@ class StudentDashboardService {
           .replaceFirst('https:/', 'https://');
     }
     final sid = (e['student_id'] ?? e['studentId'] ?? '').toString();
-    if (name.isNotEmpty) {
-      return '$baseUrl/get_candidate_photo.php?name=' +
-          Uri.encodeComponent(name);
-    }
+    final cb = DateTime.now().millisecondsSinceEpoch.toString();
     if (sid.isNotEmpty) {
       return '$baseUrl/get_candidate_photo.php?student_id=' +
-          Uri.encodeComponent(sid);
+          Uri.encodeComponent(sid) + '&cb=' + cb;
+    }
+    if (name.isNotEmpty) {
+      return '$baseUrl/get_candidate_photo.php?name=' +
+          Uri.encodeComponent(name) + '&cb=' + cb;
     }
     return null;
   }
