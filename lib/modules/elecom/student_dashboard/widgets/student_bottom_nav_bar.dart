@@ -1244,10 +1244,52 @@ class _ResultsChartsSheetState extends State<_ResultsChartsSheet> {
         final position = (m['position'] ?? m['position_name'] ?? m['pos'] ?? '').toString();
         final organization = (m['organization'] ?? m['org'] ?? m['organization_name'] ?? '').toString();
         final party = (m['party'] ?? m['party_name'] ?? m['organization_party'] ?? '').toString();
+        final id = (m['student_id'] ?? m['studentId'] ?? m['candidate_id'] ?? m['candidateId'] ?? m['cid'] ?? m['id'] ?? '').toString();
         final photoUrl = (m['photo'] ?? m['photoUrl'] ?? m['image'] ?? m['img_url'] ?? '').toString();
-        return _ResultItem(name: name, votes: votes, position: position, organization: organization, party: party, photoUrl: photoUrl);
+        return _ResultItem(name: name, votes: votes, position: position, organization: organization, party: party, photoUrl: photoUrl, id: id);
       }).where((r) => r.name.isNotEmpty).toList();
-      return mapped;
+
+      // Cross-reference full candidates list to strengthen id/photo mapping
+      try {
+        final allCandidates = await StudentDashboardService.loadCandidates();
+        String norm(String s) => s.replaceAll('.', '').replaceAll(RegExp(r'\s+'), ' ').trim().toLowerCase();
+        String npos(String s) => s.trim().toLowerCase();
+        String norg(String s) => s.trim().toLowerCase();
+        final items = mapped.map((r) {
+          if (r.id.isNotEmpty && r.photoUrl.isNotEmpty) return r;
+          final rn = norm(r.name);
+          // Exact name matches first
+          final matches = allCandidates.where((c) => norm((c['name'] ?? '').toString()) == rn).toList();
+          Map<String, dynamic>? best;
+          if (matches.length == 1) {
+            best = matches.first;
+          } else if (matches.isNotEmpty) {
+            // Prefer same position and organization when available
+            best = matches.firstWhere(
+              (c) => npos((c['position'] ?? '').toString()) == npos(r.position) && norg((c['organization'] ?? '').toString()) == norg(r.organization),
+              orElse: () => matches.first,
+            );
+          }
+          if (best != null) {
+            final nid = (best['id'] ?? '').toString();
+            final nphoto = (best['photoUrl'] ?? '').toString();
+            return _ResultItem(
+              name: r.name,
+              votes: r.votes,
+              position: r.position,
+              organization: r.organization,
+              party: r.party,
+              photoUrl: r.photoUrl.isNotEmpty ? r.photoUrl : nphoto,
+              id: r.id.isNotEmpty ? r.id : nid,
+            );
+          }
+          return r;
+        }).toList();
+        return items;
+      } catch (_) {
+        // If enrichment fails, return mapped as-is
+        return mapped;
+      }
     }
 
     try {
@@ -1457,6 +1499,7 @@ class _ResultItem {
   final String organization;
   final String party;
   final String photoUrl;
+  final String id;
   const _ResultItem({
     required this.name,
     required this.votes,
@@ -1464,6 +1507,7 @@ class _ResultItem {
     required this.organization,
     this.party = '',
     this.photoUrl = '',
+    this.id = '',
   });
 }
 
@@ -1537,7 +1581,7 @@ class _CandidateCard extends StatelessWidget {
                   width: 40,
                   height: 40,
                   child: FutureBuilder<String?>(
-                    future: _PhotoResolver.resolve(item.name, item.photoUrl),
+                    future: _PhotoResolver.resolve(item.name, item.photoUrl, studentId: item.id),
                     builder: (context, snap) {
                       final url = snap.data;
                       if (url != null && url.isNotEmpty) {
@@ -1610,7 +1654,7 @@ class _CandidateCard extends StatelessWidget {
 }
 
 class _PhotoResolver {
-  static Future<String?> resolve(String name, String photoUrl) async {
+  static Future<String?> resolve(String name, String photoUrl, {String? studentId}) async {
     // Prefer explicit URL if provided and valid
     final List<String> candidates = [];
     if (photoUrl.isNotEmpty) candidates.add(photoUrl);
@@ -1624,14 +1668,21 @@ class _PhotoResolver {
     final base = apiBaseUrl.endsWith('/') ? apiBaseUrl.substring(0, apiBaseUrl.length - 1) : apiBaseUrl;
     String enc(String s) => Uri.encodeComponent(s);
     String encPlus(String s) => enc(s).replaceAll('%20', '+');
+    final cb = DateTime.now().millisecondsSinceEpoch.toString();
+
+    // If we have an exact student/candidate ID, prefer it
+    final sid = (studentId ?? '').trim();
+    if (sid.isNotEmpty) {
+      candidates.add('$base/get_candidate_photo.php?student_id=${enc(sid)}&cb=$cb');
+    }
 
     final paths = <String>[
-      '$base/get_candidate_photo.php?name=${enc(trimmed)}',
-      '$base/get_candidate_photo.php?name=${encPlus(trimmed)}',
-      '$base/get_candidate_photo.php?name=${enc(noDots)}',
-      '$base/get_candidate_photo.php?name=${encPlus(noDots)}',
-      if (noInitials != trimmed) '$base/get_candidate_photo.php?name=${enc(noInitials)}',
-      if (noInitials != trimmed) '$base/get_candidate_photo.php?name=${encPlus(noInitials)}',
+      '$base/get_candidate_photo.php?name=${enc(trimmed)}&cb=$cb',
+      '$base/get_candidate_photo.php?name=${encPlus(trimmed)}&cb=$cb',
+      '$base/get_candidate_photo.php?name=${enc(noDots)}&cb=$cb',
+      '$base/get_candidate_photo.php?name=${encPlus(noDots)}&cb=$cb',
+      if (noInitials != trimmed) '$base/get_candidate_photo.php?name=${enc(noInitials)}&cb=$cb',
+      if (noInitials != trimmed) '$base/get_candidate_photo.php?name=${encPlus(noInitials)}&cb=$cb',
     ];
     candidates.addAll(paths);
 

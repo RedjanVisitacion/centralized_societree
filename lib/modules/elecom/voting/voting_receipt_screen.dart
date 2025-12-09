@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'dart:ui' show ImageFilter;
 import 'package:centralized_societree/main.dart';
 import 'package:centralized_societree/modules/elecom/dashboard.dart';
@@ -95,7 +96,7 @@ class VotingReceiptScreen extends StatelessWidget {
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: theme.colorScheme.primaryContainer.withOpacity(0.2),
+                      color: const Color(0xFF22C55E).withOpacity(0.2),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Column(
@@ -106,9 +107,29 @@ class VotingReceiptScreen extends StatelessWidget {
                           style: theme.textTheme.labelMedium,
                         ),
                         const SizedBox(height: 4),
-                        SelectableText(
-                          receiptId,
-                          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: SelectableText(
+                                receiptId,
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              tooltip: 'Copy receipt ID',
+                              icon: const Icon(Icons.copy, size: 20),
+                              onPressed: () async {
+                                await Clipboard.setData(ClipboardData(text: receiptId));
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Receipt ID copied to clipboard')),
+                                  );
+                                }
+                              },
+                            ),
+                          ],
                         ),
                         if (receiptId.startsWith('RID-')) ...[
                           const SizedBox(height: 6),
