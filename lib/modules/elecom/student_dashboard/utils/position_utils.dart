@@ -1,17 +1,36 @@
 class PositionUtils {
   static int getPositionIndex(String pos) {
+    String canon(String s) {
+      var p = s.trim().toLowerCase();
+      p = p.replaceAll('.', '');
+      p = p.replaceAll(RegExp(r"\s+"), ' ');
+      if (p == 'secretary' || p == 'gen sec' || p == 'general sec') return 'general secretary';
+      if (p == 'pio' || p == 'public info officer' || p == 'public information officer') {
+        return 'public information officer';
+      }
+      if (p.contains('representative')) {
+        if (p.contains('bsit')) return 'bsit representative';
+        if (p.contains('btled')) return 'btled representative';
+        if (p.contains('bfpt')) return 'bfpt representative';
+      }
+      return p;
+    }
+
     final order = [
       'President',
       'Vice President',
-      'Secretary',
+      'General Secretary',
+      'Associate Secretary',
       'Treasurer',
       'Auditor',
-      'P.I.O.',
-      'PIO',
       'Public Information Officer',
-      'Representative',
+      'BSIT Representative',
+      'BTLED Representative',
+      'BFPT Representative',
     ];
-    final i = order.indexWhere((e) => e.toLowerCase() == pos.toLowerCase());
+    final key = canon(pos);
+    final normalizedOrder = order.map(canon).toList();
+    final i = normalizedOrder.indexOf(key);
     return i >= 0 ? i : 1000;
   }
 
