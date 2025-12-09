@@ -123,7 +123,11 @@ class StudentBottomNavBar {
     ctrl.bindTo(_resultsVisible, _unreadCount);
     // We're on the Elecom dashboard; default highlight should be Home
     if (ctrl.currentIndex.value != 0) {
-      ctrl.currentIndex.value = 0;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (ctrl.currentIndex.value != 0) {
+          ctrl.currentIndex.value = 0;
+        }
+      });
     }
     Widget wrappedNavBar = ListenableBuilder(
       listenable: themeNotifier,
@@ -1335,7 +1339,7 @@ class _ResultsChartsSheetState extends State<_ResultsChartsSheet> {
         return 'Public Information Officer';
       }
       // Representatives FIRST to avoid matching 'PRES' inside 'REPRESENTATIVE'
-      if (u.contains('REP') && u.contains('IT')) return 'IT Representative';
+      if (u.contains('REP') && u.contains('IT')) return 'BSIT Representative';
       if (u.contains('REP') && u.contains('BTLED')) return 'BTLED Representative';
       if (u.contains('REP') && u.contains('BFPT')) return 'BFPT Representative';
       if (u.contains('VICE') && u.contains('PRES')) return 'Vice President';
@@ -1357,7 +1361,7 @@ class _ResultsChartsSheetState extends State<_ResultsChartsSheet> {
       'Auditor',
       'Public Information Officer',
     ];
-    const usgExtra = ['IT Representative', 'BTLED Representative', 'BFPT Representative'];
+    const usgExtra = ['BSIT Representative', 'BTLED Representative', 'BFPT Representative'];
 
     // Group items by org->position
     final grouped = <String, Map<String, List<_ResultItem>>>{};
@@ -1655,7 +1659,7 @@ class _VotesByPositionChart extends StatelessWidget {
       final u = s.toUpperCase().trim();
       if (u == 'PIO' || u == 'P.I.O' || u.contains('PUBLIC INFORMATION')) return 'Public Information Officer';
       // Representatives FIRST to avoid matching 'PRES' inside 'REPRESENTATIVE'
-      if (u.contains('REP') && u.contains('IT')) return 'IT Representative';
+      if (u.contains('REP') && u.contains('IT')) return 'BSIT Representative';
       if (u.contains('REP') && u.contains('BTLED')) return 'BTLED Representative';
       if (u.contains('REP') && u.contains('BFPT')) return 'BFPT Representative';
       if (u.contains('VICE') && u.contains('PRES')) return 'Vice President';
@@ -1683,7 +1687,7 @@ class _VotesByPositionChart extends StatelessWidget {
       'Treasurer',
       'Auditor',
       'Public Information Officer',
-      'IT Representative',
+      'BSIT Representative',
       'BTLED Representative',
       'BFPT Representative',
     ];

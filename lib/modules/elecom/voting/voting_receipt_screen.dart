@@ -29,12 +29,12 @@ class VotingReceiptScreen extends StatelessWidget {
       if (u.contains('AFPROTECHS') || u.contains('APFROTECHS')) return 3;
       return 99;
     }
-    const usgPositions = <String>['President','Vice President','General Secretary','Associate Secretary','Treasurer','Auditor','P.I.O','IT Representative','BTLED Representative','BFPT Representative'];
-    const deptPositions = <String>['President','Vice President','General Secretary','Associate Secretary','Treasurer','Auditor','P.I.O'];
+    const usgPositions = <String>['President','Vice President','General Secretary','Associate Secretary','Treasurer','Auditor','Public Information Officer','BSIT Representative','BTLED Representative','BFPT Representative'];
+    const deptPositions = <String>['President','Vice President','General Secretary','Associate Secretary','Treasurer','Auditor','Public Information Officer'];
     String normPos(String s) {
       final t = s.toLowerCase().trim();
       // Detect representative roles first to avoid matching the 'pres' substring inside 'representative'
-      if (t.contains('it') && t.contains('rep')) return 'IT Representative';
+      if (t.contains('it') && t.contains('rep')) return 'BSIT Representative';
       if (t.contains('btled') && t.contains('rep')) return 'BTLED Representative';
       if (t.contains('bfpt') && t.contains('rep')) return 'BFPT Representative';
       if (t.contains('representative') || (t.contains('rep') && !t.contains('president'))) return 'Representative';
@@ -45,7 +45,7 @@ class VotingReceiptScreen extends StatelessWidget {
       if (t.contains('associate') && t.contains('secret')) return 'Associate Secretary';
       if (t.contains('treas')) return 'Treasurer';
       if (t.contains('audit')) return 'Auditor';
-      if (t.contains('pio') || t.contains('public')) return 'P.I.O';
+      if (t.contains('pio') || t.contains('public')) return 'Public Information Officer';
       return s;
     }
     int posPri(String org, String pos) {

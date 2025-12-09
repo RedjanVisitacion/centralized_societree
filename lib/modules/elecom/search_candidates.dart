@@ -178,28 +178,97 @@ class _SearchCandidatesState extends State<SearchCandidates> {
         })
         .cast<Map<String, dynamic>>()
         .toList();
-    int _posIndex(String pos) {
-      final order = [
-        'President',
-        'Vice President',
-        'Secretary',
-        'Treasurer',
-        'Auditor',
-        'P.I.O.',
-        'PIO',
-        'Public Information Officer',
-        'Representative',
-      ];
-      final i = order.indexWhere((e) => e.toLowerCase() == pos.toLowerCase());
-      return i >= 0 ? i : 1000;
+
+    String _normOrg(String s) {
+      final u = s.toUpperCase().replaceAll(RegExp(r'[^A-Z]'), '');
+      if (u.contains('USG')) return 'USG';
+      if (u.contains('SITE')) return 'SITE';
+      if (u.contains('PAFE')) return 'PAFE';
+      if (u.contains('AFPROTECHS') || u.contains('APFROTECHS') || u.contains('BFPT')) return 'APFROTECHS';
+      return s.toUpperCase().trim();
     }
 
-    final positions =
-        partyCandidates
-            .map((e) => (e['position'] ?? '').toString())
-            .toSet()
-            .toList()
-          ..sort((a, b) => _posIndex(a).compareTo(_posIndex(b)));
+    String _normPos(String s) {
+      final t = s.toLowerCase().trim();
+      if ((t.contains('president') || (t.startsWith('pres') && t.contains('ident'))) && !t.contains('vice')) return 'President';
+      if (t.contains('vice') && (t.contains('president') || t.contains('pres'))) return 'Vice President';
+      if (t.contains('general') && t.contains('secret')) return 'General Secretary';
+      if (t.contains('associate') && t.contains('secret')) return 'Associate Secretary';
+      if (t.contains('treas')) return 'Treasurer';
+      if (t.contains('audit')) return 'Auditor';
+      if (t.contains('pio') || t.contains('public')) return 'Public Information Officer';
+      if (t.contains('it') && t.contains('rep')) return 'BSIT Representative';
+      if (t.contains('btled') && t.contains('rep')) return 'BTLED Representative';
+      if ((t.contains('bfpt') || t.contains('fpt')) && t.contains('rep')) return 'BFPT Representative';
+      return s;
+    }
+
+    final orgToPositions = <String, List<String>>{
+      'USG': [
+        'President',
+        'Vice President',
+        'General Secretary',
+        'Associate Secretary',
+        'Treasurer',
+        'Auditor',
+        'Public Information Officer',
+        'BSIT Representative',
+        'BTLED Representative',
+        'BFPT Representative',
+      ],
+      'SITE': [
+        'President',
+        'Vice President',
+        'General Secretary',
+        'Associate Secretary',
+        'Treasurer',
+        'Auditor',
+        'Public Information Officer',
+      ],
+      'PAFE': [
+        'President',
+        'Vice President',
+        'General Secretary',
+        'Associate Secretary',
+        'Treasurer',
+        'Auditor',
+        'Public Information Officer',
+      ],
+      'APFROTECHS': [
+        'President',
+        'Vice President',
+        'General Secretary',
+        'Associate Secretary',
+        'Treasurer',
+        'Auditor',
+        'Public Information Officer',
+      ],
+    };
+
+    final orgSet = partyCandidates
+        .map((c) => _normOrg((c['organization'] ?? '').toString()))
+        .where((o) => o.isNotEmpty)
+        .toSet();
+    String org = 'USG';
+    if (orgSet.contains('USG')) org = 'USG';
+    else if (orgSet.contains('SITE')) org = 'SITE';
+    else if (orgSet.contains('PAFE')) org = 'PAFE';
+    else if (orgSet.contains('APFROTECHS')) org = 'APFROTECHS';
+
+    partyCandidates = partyCandidates
+        .map((c) => {
+              ...c,
+              'position': _normPos((c['position'] ?? '').toString()),
+            })
+        .toList();
+
+    final existing = partyCandidates
+        .map((e) => (e['position'] ?? '').toString())
+        .where((p) => p.isNotEmpty)
+        .toSet();
+    final positions = [
+      ...?orgToPositions[org]?.where((p) => existing.contains(p)),
+    ];
     showModalBottomSheet(
       context: context,
       useRootNavigator: true,
