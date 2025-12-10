@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import '../modules/usg/model/announcement_model.dart';
 
 class ApiService {
   final String baseUrl;
@@ -357,6 +358,35 @@ class ApiService {
         'status': res.statusCode,
         'raw': raw,
       };
+    }
+  }
+
+  Future<Map<String, dynamic>> getAnnouncements() async {
+  final uri = Uri.parse('$baseUrl/usg_announcement_retrieve.php'); // <-- FIXED
+  final res = await http
+      .get(
+        uri,
+        headers: _jsonHeaders,
+      )
+      .timeout(_timeout);
+  return _decode(res);
+  }
+
+  Future<List<Announcement>> getAnnouncementsList() async {
+    try {
+      final response = await getAnnouncements();
+      
+      if (response['success'] == true) {
+        final List<dynamic> data = response['announcements'] ?? [];
+        
+        return data.map((item) {
+          return Announcement.fromJson(Map<String, dynamic>.from(item));
+        }).toList();
+      } else {
+        throw Exception(response['message'] ?? 'Failed to load announcements');
+      }
+    } catch (e) {
+      rethrow;
     }
   }
 }

@@ -5,18 +5,21 @@ import 'package:centralized_societree/modules/usg/dialogs/usg_terms_dialog.dart'
 import 'package:centralized_societree/modules/usg/dialogs/logout_dialog.dart';
 import 'package:centralized_societree/screens/societree/societree_dashboard.dart';
 import 'package:centralized_societree/screens/login_screen.dart';
-import 'pages/announcement.dart';
+import 'pages/announcement_page.dart';
 import 'pages/services.dart';
 import 'pages/profile.dart';
+import '../../services/api_service.dart';
 
-class StudentDashboard extends StatefulWidget {
+class StudentDashboard extends StatefulWidget { 
   final String orgName;
   final String? assetPath;
+  final ApiService apiService;
 
   const StudentDashboard({
     super.key,
     required this.orgName,
     this.assetPath,
+    required this.apiService,
   });
 
   @override
@@ -55,7 +58,7 @@ class _StudentDashboardState extends State<StudentDashboard> {
     // Create screens array with all pages
     final screens = [
       _buildHomeScreen(context),
-      const AnnouncementPage(),
+      AnnouncementPage(apiService: widget.apiService),
       const ServicesPage(),
       const ProfilePage(),
     ];

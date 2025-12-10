@@ -2,15 +2,18 @@
 import 'package:centralized_societree/modules/usg/student_dashboard.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../../services/api_service.dart';
 
 class SplashScreen extends StatefulWidget {
   final String orgName;
   final String? assetPath;
+  final ApiService apiService;
   
   const SplashScreen({
     super.key,
     required this.orgName,
     this.assetPath,
+    required this.apiService,
   });
 
   @override
@@ -29,6 +32,7 @@ class _SplashScreenState extends State<SplashScreen> {
             builder: (_) => StudentDashboard(
               orgName: widget.orgName,
               assetPath: widget.assetPath,
+              apiService: widget.apiService,
             ),
           ),
         );

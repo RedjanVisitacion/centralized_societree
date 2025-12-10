@@ -5,6 +5,9 @@ import 'package:centralized_societree/modules/elecom/student_dashboard/student_d
     as Elecom;
 import 'package:centralized_societree/modules/usg/screen/splash_screen.dart'
     as USG;
+
+import 'package:centralized_societree/modules/pafe/home_page.dart'
+    as PAFE;
 import 'package:flutter/material.dart';
 import 'package:centralized_societree/services/user_session.dart';
 import 'package:centralized_societree/config/api_config.dart';
@@ -413,7 +416,7 @@ class _SocieTreeDashboardState extends State<SocieTreeDashboard> {
                             item: it,
                             onTap: () {
                               final nameU = it.name.toUpperCase();
-                              final isElecom = nameU == 'ELECOM' || nameU == 'PAFE' || nameU == 'SITE';
+                              final isElecom = nameU == 'ELECOM' || nameU == 'SITE';
                               Navigator.of(context).push(
                                 MaterialPageRoute(
                                   builder: (_) => isElecom
@@ -425,7 +428,10 @@ class _SocieTreeDashboardState extends State<SocieTreeDashboard> {
                                           ? USG.SplashScreen(
                                           orgName: it.name,
                                           assetPath: it.assetPath,
+                                          apiService: _api,
                                         )
+                                        : nameU == 'PAFE'
+                                          ? PAFE.HomePage()
                                       : StudentDashboard(
                                           orgName: it.name,
                                           assetPath: it.assetPath,
