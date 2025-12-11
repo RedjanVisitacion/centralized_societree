@@ -11,6 +11,8 @@ import 'package:centralized_societree/modules/arcu/homepage.dart'
     as ARCU;
 import 'package:centralized_societree/modules/afprotechs/afprotech_dashboard.dart'
     as AFPROTECHS;
+import 'package:centralized_societree/modules/site/controllers/site_dashboard.dart'
+    as SITE;
 import 'package:flutter/material.dart';
 import 'package:centralized_societree/services/user_session.dart';
 import 'package:centralized_societree/config/api_config.dart';
@@ -419,7 +421,7 @@ class _SocieTreeDashboardState extends State<SocieTreeDashboard> {
                             item: it,
                             onTap: () {
                               final nameU = it.name.toUpperCase();
-                              final isElecom = nameU == 'ELECOM' || nameU == 'SITE';
+                              final isElecom = nameU == 'ELECOM';
                               Navigator.of(context).push(
                                 MaterialPageRoute(
                                   builder: (_) => isElecom
@@ -440,7 +442,13 @@ class _SocieTreeDashboardState extends State<SocieTreeDashboard> {
                                         : nameU == 'AFPROTECHS'
                                           ? AFPROTECHS.DashboardScreen(
                                             orgName: 'AFPROTECHS',
-                                            assetPath: 'assets/images/AFPROTECH.png',)
+                                            assetPath: 'assets/images/AFPROTECH.png',
+                                            )
+                                        : nameU == 'SITE'
+                                          ? SITE.SiteDashboard(
+                                            orgName: 'SITE', 
+                                            assetPath: 'assets/images/SITE.png',
+                                          )
                                       : StudentDashboard(
                                           orgName: it.name,
                                           assetPath: it.assetPath,
