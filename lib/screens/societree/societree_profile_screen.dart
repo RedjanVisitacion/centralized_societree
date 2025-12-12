@@ -118,6 +118,7 @@ class _SocietreeProfileScreenState extends State<SocietreeProfileScreen> {
                             children: [
                               Positioned(
                                 left: 16,
+                                right: 16,
                                 bottom: 16,
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.end,
@@ -128,22 +129,15 @@ class _SocietreeProfileScreenState extends State<SocietreeProfileScreen> {
                                       child: CircleAvatar(
                                         radius: 37,
                                         backgroundColor: theme.colorScheme.primaryContainer,
-                                        child: Builder(builder: (_) {
-                                          final name = _safe(_user, 'full_name');
-                                          final initialSource = name.isNotEmpty ? name : (UserSession.studentId ?? 'U');
-                                          final initial = initialSource.isNotEmpty ? initialSource.substring(0, 1).toUpperCase() : 'U';
-                                          return Text(
-                                            initial,
-                                            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-                                          );
-                                        }),
+                                        backgroundImage: const AssetImage('assets/images/Icon-CRCL.png'),
                                       ),
                                     ),
                                     const SizedBox(width: 12),
-                                    Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
                                         Builder(builder: (_) {
                                           final name = _safe(_user, 'full_name');
                                           final title = name.isNotEmpty ? name : (_safe(_user, 'student_id').isNotEmpty ? _safe(_user, 'student_id') : 'Student');
@@ -154,6 +148,9 @@ class _SocietreeProfileScreenState extends State<SocietreeProfileScreen> {
                                               fontWeight: FontWeight.w700,
                                               color: Colors.white,
                                             ),
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                            softWrap: true,
                                           );
                                         }),
                                         const SizedBox(height: 4),
@@ -170,9 +167,12 @@ class _SocietreeProfileScreenState extends State<SocietreeProfileScreen> {
                                           return Text(
                                             parts.isNotEmpty ? parts.join(' • ') : '',
                                             style: const TextStyle(color: Colors.white70),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
                                           );
                                         }),
-                                      ],
+                                        ],
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -231,8 +231,8 @@ class _SocietreeProfileScreenState extends State<SocietreeProfileScreen> {
                                     _InfoRow(icon: Icons.workspace_premium_outlined, label: 'Role', value: _safe(_user, 'role')),
                                     const Divider(height: 1),
                                     _InfoRow(icon: Icons.school_outlined, label: 'Department', value: _safe(_user, 'department')),
-                                    const Divider(height: 1),
-                                    _InfoRow(icon: Icons.work_outline, label: 'Position', value: _safe(_user, 'position')),
+                                    // const Divider(height: 1),
+                                    // _InfoRow(icon: Icons.work_outline, label: 'Position', value: _safe(_user, 'position')),
                                   ],
                                 ),
                               ),
