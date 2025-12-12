@@ -30,6 +30,16 @@ class ApiService {
     return _decode(res);
   }
 
+  Future<Map<String, dynamic>> getUser({
+    required String studentId,
+  }) async {
+    final uri = Uri.parse('$baseUrl/get_user.php').replace(queryParameters: {
+      'student_id': studentId,
+    });
+    final res = await http.get(uri).timeout(_timeout);
+    return _decode(res);
+  }
+
   Future<Map<String, dynamic>> updateUserContact({
     required String studentId,
     String? email,
