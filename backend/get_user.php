@@ -24,7 +24,25 @@ if ($student_id === '') {
 }
 
 $mysqli = db_connect();
-$sql = 'SELECT student_id, role, department, position, phone, email, created_at FROM users WHERE student_id = ? LIMIT 1';
+$sql = 'SELECT 
+  u.student_id,
+  u.role,
+  u.department,
+  u.position,
+  u.phone,
+  u.email,
+  u.created_at,
+  s.first_name,
+  s.middle_name,
+  s.last_name,
+  s.course,
+  s.year,
+  s.section,
+  TRIM(CONCAT(s.first_name, " ", IFNULL(s.middle_name, ""), " ", s.last_name)) AS full_name
+FROM users u
+LEFT JOIN student s ON s.id_number = u.student_id
+WHERE u.student_id = ?
+LIMIT 1';
 if ($stmt = $mysqli->prepare($sql)) {
   $stmt->bind_param('s', $student_id);
   if (!$stmt->execute()) {

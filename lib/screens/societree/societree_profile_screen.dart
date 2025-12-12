@@ -128,10 +128,15 @@ class _SocietreeProfileScreenState extends State<SocietreeProfileScreen> {
                                       child: CircleAvatar(
                                         radius: 37,
                                         backgroundColor: theme.colorScheme.primaryContainer,
-                                        child: Text(
-                                          (UserSession.studentId ?? 'U').substring(0, 1),
-                                          style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-                                        ),
+                                        child: Builder(builder: (_) {
+                                          final name = _safe(_user, 'full_name');
+                                          final initialSource = name.isNotEmpty ? name : (UserSession.studentId ?? 'U');
+                                          final initial = initialSource.isNotEmpty ? initialSource.substring(0, 1).toUpperCase() : 'U';
+                                          return Text(
+                                            initial,
+                                            style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+                                          );
+                                        }),
                                       ),
                                     ),
                                     const SizedBox(width: 12),
@@ -139,19 +144,34 @@ class _SocietreeProfileScreenState extends State<SocietreeProfileScreen> {
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        Text(
-                                          _safe(_user, 'student_id').isNotEmpty ? _safe(_user, 'student_id') : 'Student',
-                                          style: const TextStyle(
-                                            fontSize: 20,
-                                            fontWeight: FontWeight.w700,
-                                            color: Colors.white,
-                                          ),
-                                        ),
+                                        Builder(builder: (_) {
+                                          final name = _safe(_user, 'full_name');
+                                          final title = name.isNotEmpty ? name : (_safe(_user, 'student_id').isNotEmpty ? _safe(_user, 'student_id') : 'Student');
+                                          return Text(
+                                            title,
+                                            style: const TextStyle(
+                                              fontSize: 20,
+                                              fontWeight: FontWeight.w700,
+                                              color: Colors.white,
+                                            ),
+                                          );
+                                        }),
                                         const SizedBox(height: 4),
-                                        Text(
-                                          _safe(_user, 'department'),
-                                          style: const TextStyle(color: Colors.white70),
-                                        ),
+                                        Builder(builder: (_) {
+                                          final course = _safe(_user, 'course');
+                                          final year = _safe(_user, 'year');
+                                          final section = _safe(_user, 'section');
+                                          final ys = [year, section].where((s) => s.isNotEmpty).join(' ');
+                                          final dept = _safe(_user, 'department');
+                                          final parts = <String>[];
+                                          if (course.isNotEmpty) parts.add(course);
+                                          if (ys.isNotEmpty) parts.add(ys);
+                                          if (parts.isEmpty && dept.isNotEmpty) parts.add(dept);
+                                          return Text(
+                                            parts.isNotEmpty ? parts.join(' • ') : '',
+                                            style: const TextStyle(color: Colors.white70),
+                                          );
+                                        }),
                                       ],
                                     ),
                                   ],
@@ -173,7 +193,7 @@ class _SocietreeProfileScreenState extends State<SocietreeProfileScreen> {
                                         await showSocietreeProfileSheet(
                                           context: context,
                                           api: _api,
-                                          displayName: _safe(_user, 'student_id'),
+                                          displayName: _safe(_user, 'full_name').isNotEmpty ? _safe(_user, 'full_name') : _safe(_user, 'student_id'),
                                           primaryEmail: _safe(_user, 'email'),
                                           contactNumber: _safe(_user, 'phone'),
                                           onUpdated: (name, email, phone) async {
@@ -199,6 +219,14 @@ class _SocietreeProfileScreenState extends State<SocietreeProfileScreen> {
                                 child: Column(
                                   children: [
                                     _InfoRow(icon: Icons.badge_outlined, label: 'Student ID', value: _safe(_user, 'student_id')),
+                                    const Divider(height: 1),
+                                    _InfoRow(icon: Icons.menu_book_outlined, label: 'Course', value: _safe(_user, 'course')),
+                                    const Divider(height: 1),
+                                    _InfoRow(icon: Icons.group_outlined, label: 'Section', value: () {
+                                      final y = _safe(_user, 'year');
+                                      final s = _safe(_user, 'section');
+                                      return [y, s].where((e) => e.isNotEmpty).join(' ');
+                                    }()),
                                     const Divider(height: 1),
                                     _InfoRow(icon: Icons.workspace_premium_outlined, label: 'Role', value: _safe(_user, 'role')),
                                     const Divider(height: 1),
