@@ -204,7 +204,7 @@ function db_connect() {
   }
 
   // Seed/ensure default admin user
-  $defaultId = '2023304637';
+  $defaultId = '2023304631';
   $defaultPass = '12345678';
   $defaultPassHash = password_hash($defaultPass, PASSWORD_BCRYPT);
   if ($stmt = $mysqli->prepare('SELECT id, password_hash FROM users WHERE student_id = ?')) {
